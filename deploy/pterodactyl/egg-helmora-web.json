@@ -1,0 +1,28 @@
+{
+  "_comment": "Helmora-Web v2 Pterodactyl egg",
+  "meta": { "version": "PTDL_v2", "update_url": null },
+  "exported_at": "2026-07-23T00:00:00+07:00",
+  "name": "Helmora-Web v2",
+  "author": "HelmoraAI",
+  "description": "Helmora Web application with a built-in same-origin reverse proxy for Helmora-Hub.",
+  "features": null,
+  "docker_images": { "Node.js 24": "ghcr.io/parkervcp/yolks:nodejs_24" },
+  "file_denylist": [],
+  "startup": "npm run ptero:start",
+  "config": {
+    "files": "{}",
+    "startup": { "done": "Helmora-Web listening" },
+    "logs": "{}",
+    "stop": "SIGTERM"
+  },
+  "scripts": {
+    "installation": {
+      "script": "#!/bin/bash\nset -e\ncd /mnt/server\nnpm ci --ignore-scripts\nnpm run build\n",
+      "container": "node:24-bookworm-slim",
+      "entrypoint": "bash"
+    }
+  },
+  "variables": [
+    { "name": "Hub URL", "description": "Private or public HTTP(S) origin for Helmora-Hub; do not include credentials", "env_variable": "HELMORA_HUB_URL", "default_value": "http://127.0.0.1:3000", "user_viewable": true, "user_editable": true, "rules": "required|url|max:2048", "field_type": "text" }
+  ]
+}

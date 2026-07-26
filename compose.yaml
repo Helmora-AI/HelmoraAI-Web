@@ -1,0 +1,19 @@
+services:
+  helmora-web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: helmora-web:2.0.0-alpha.1
+    restart: unless-stopped
+    ports:
+      - "${HELMORA_WEB_PORT:-4173}:4173"
+    environment:
+      HELMORA_WEB_HOST: 0.0.0.0
+      HELMORA_WEB_PORT: 4173
+      HELMORA_HUB_URL: "${HELMORA_HUB_URL:-http://host.docker.internal:3000}"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

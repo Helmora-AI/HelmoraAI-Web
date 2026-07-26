@@ -1,0 +1,56 @@
+# Dependencies and tool caches
+node_modules/
+.npm/
+.npm-cache/
+.cache/
+.vite/
+*.tsbuildinfo
+.eslintcache
+.stylelintcache
+vite.config.*.timestamp-*
+
+# Generated build, coverage and browser output
+dist/
+coverage/
+playwright-report/
+playwright-report-*/
+test-results/
+test-results-*/
+blob-report/
+blob-report-*/
+playwright/.auth/
+
+# Logs and process state
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.pid
+*.pid.lock
+
+# Local environment and credentials
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.secret
+
+# Private local state, documentation and tooling
+tmp/
+docs/local/
+.agents/
+.codex/
+
+# Editors and operating systems
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini

@@ -1,0 +1,31 @@
+[Unit]
+Description=Helmora-Web v2 frontend and Hub reverse proxy
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=helmora
+Group=helmora
+WorkingDirectory=/opt/helmora-web
+EnvironmentFile=/etc/helmora-web/helmora-web.env
+ExecStart=/usr/bin/node /opt/helmora-web/scripts/serve.mjs
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=30
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectControlGroups=true
+ProtectKernelLogs=true
+ProtectKernelModules=true
+ProtectKernelTunables=true
+RestrictSUIDSGID=true
+LockPersonality=true
+RestrictRealtime=true
+SystemCallArchitectures=native
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target
