@@ -1,0 +1,21 @@
+{
+  "version": 1,
+  "include": [
+    "/api/*",
+    "/v1/*",
+    "/mcp",
+    "/mcp/*",
+    "/health",
+    "/ready",
+    "/version",
+    "/openapi.json"
+  ],
+  "exclude": [
+    "/assets/*",
+    "/logo/*",
+    "/favicon.ico",
+    "/favicon.svg",
+    "/robots.txt",
+    "/manifest.webmanifest"
+  ]
+}

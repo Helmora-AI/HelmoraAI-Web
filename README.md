@@ -133,6 +133,52 @@ For Internet exposure, place an HTTPS reverse proxy in front of Web. Publish
 the Hub port only when SDK, IDE or CLI clients require it; otherwise keep the
 Hub origin private and accessible only to the Web server.
 
+## Optional Cloudflare Pages Hub proxy
+
+The production Vite `dist` can be hosted on Cloudflare Pages. Pages does not
+run `scripts/serve.mjs`, so Hub API surfaces need an optional Pages Function
+reverse proxy. The browser continues to call same-origin `/api`, `/v1`, `/mcp`,
+health, readiness, version and OpenAPI paths; cookies, CSRF and SSE stay
+same-origin from the browser’s perspective.
+
+This path is **opt-in and fail-closed**. Enable it only with exact Pages
+Function bindings (never `VITE_` variables; never compile Hub URLs into the
+client bundle):
+
+```text
+HELMORA_CF_PAGES_PROXY_ENABLED=true
+HELMORA_HUB_URL=https://hub.example.com
+```
+
+Pair Hub/Pterodactyl with the public Hub origin and every browser origin that
+must authenticate (Production and Preview Pages environments are separate):
+
+```text
+HELMORA_PUBLIC_URL=https://hub.example.com
+HELMORA_ALLOWED_ORIGINS=https://hub.example.com,https://app.example.com
+```
+
+Rules:
+
+- `HELMORA_HUB_URL` must be an exact HTTPS origin (no credentials, path, query
+  or fragment). It is not a Vite variable.
+- Missing, empty, false or invalid `HELMORA_CF_PAGES_PROXY_ENABLED` keeps the
+  proxy off. Hub routes then return a typed `HUB_PROXY_DISABLED` / config 503
+  without upstream fetches.
+- Never place tunnel tokens, setup tokens, master keys, provider keys or Hub
+  API keys in Cloudflare Pages.
+- Cloudflare Tunnel and the Pages proxy are separate concerns. The Hub URL may
+  be backed by Tunnel or any other HTTPS deployment.
+- The Function does not weaken Hub authentication, CSRF, allowed-origin or
+  request-limit enforcement.
+- Vite `npm run dev`, `npm start`, Docker/Pterodactyl and all-in-one ignore the
+  Pages Function directory and keep their existing proxies.
+
+Cloudflare Pages build settings remain: Framework preset React (Vite), build
+command `npm run build`, output directory `dist`, Node 24. Evidence for this
+proxy is local mock/contract tests plus production bundle/typecheck; it is not
+claimed as live-validated on Cloudflare until an operator deploys it.
+
 ## Provider and model workflow
 
 Web preserves the lifecycle boundaries enforced by Hub:
@@ -196,10 +242,13 @@ local test output.
 - environment template: `deploy/systemd/helmora-web.env.example`
 - Pterodactyl egg: `deploy/pterodactyl/egg-helmora-web.json`
 - Pterodactyl startup: `npm run ptero:start`
+- Cloudflare Pages (optional): `functions/[[path]].ts`, `public/_routes.json`,
+  bindings `HELMORA_CF_PAGES_PROXY_ENABLED` + HTTPS `HELMORA_HUB_URL`
 
 These assets pass static/config validation. The current Docker image, systemd
 host deployment and Pterodactyl panel flow have not yet been live-proven
-against this exact source revision.
+against this exact source revision. The Pages Hub proxy has mock/contract
+evidence only until an operator deploys it.
 
 ## Repository documentation
 
@@ -220,6 +269,9 @@ against this exact source revision.
 - Provider logo assets remain large and have no public asset-size gate.
 - There is no dedicated UI for native-stream support observations or synthetic
   TTFT.
+- Optional Cloudflare Pages Hub proxy is implemented and mock/contract-tested;
+  it is not claimed as live-validated on Cloudflare until an operator deploys
+  it.
 
 Treat these items as alpha release boundaries, not as a production-readiness
 claim.
