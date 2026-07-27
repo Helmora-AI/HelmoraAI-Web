@@ -202,7 +202,7 @@ test("usage inspection, redacted audit and webhook lifecycle work through operat
   await loginThroughUi(page, app);
 
   await page.goto(`${app.baseURL}/usage`);
-  const requestRow = page.locator(".request-list article").filter({ hasText: "fixture-route" });
+  const requestRow = page.locator(".usage-table tbody tr").filter({ hasText: "fixture-route" });
   await expect(requestRow).toContainText("completed");
   await requestRow.getByRole("button", { name: "Inspect" }).click();
   const inspector = page.getByRole("dialog", { name: "Request details" });

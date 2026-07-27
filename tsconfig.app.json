@@ -20,5 +20,5 @@
     "types": ["vitest/globals", "@testing-library/jest-dom"]
   },
   "include": ["src"],
-  "exclude": ["src/cloudflare/pagesProxy.test.ts"]
+  "exclude": ["src/cloudflare/pagesProxy.test.ts", "src/static/staticDelivery.test.ts"]
 }

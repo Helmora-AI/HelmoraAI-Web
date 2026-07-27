@@ -2,10 +2,20 @@ import { Badge, Button } from "@astryxdesign/core";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { RequestError } from "../components/InlineAlert";
+import { ProviderIcon, providerIconBadge } from "../components/ProviderIcon";
 import { api } from "../lib/api/client";
 import type { ListResponse, ModelSummary, RuntimeStatus, RuntimeVersion } from "../lib/api/types";
 
-interface ProvidersResponse { providers: Array<Record<string, unknown>>; connections: Array<Record<string, unknown>>; }
+interface ProviderRecord {
+  id: string;
+  display_name: string;
+  icon_key?: string;
+}
+
+interface ProvidersResponse {
+  providers: ProviderRecord[];
+  connections: Array<Record<string, unknown>>;
+}
 interface ConversationsResponse { data: Array<Record<string, unknown>>; nextCursor?: string; }
 interface TasksResponse { data: Array<Record<string, unknown>>; }
 
@@ -17,6 +27,7 @@ export function OverviewPage() {
   const conversations = useQuery({ queryKey: ["conversations", "overview"], queryFn: () => api.request<ConversationsResponse>("/api/v2/conversations?limit=5") });
   const tasks = useQuery({ queryKey: ["tasks", "overview"], queryFn: () => api.request<TasksResponse>("/api/v2/tasks?limit=5") });
   const primaryError = runtime.error ?? version.error;
+  const providerById = new Map((providers.data?.providers ?? []).map((provider) => [provider.id, provider]));
 
   return (
     <div className="page page--overview">
@@ -35,7 +46,11 @@ export function OverviewPage() {
         <section className="panel panel--wide">
           <header className="panel__header"><div><p className="eyebrow">Connection map</p><h3>Provider capacity</h3></div><Link to="/providers">Manage providers →</Link></header>
           {providers.error ? <RequestError error={providers.error} /> : providers.isPending ? <LoadingRows /> : providers.data?.connections.length ? (
-            <div className="connection-list">{providers.data.connections.slice(0, 5).map((connection, index) => <ConnectionRow key={String(connection.id ?? index)} connection={connection} />)}</div>
+            <div className="connection-list">{providers.data.connections.slice(0, 5).map((connection, index) => {
+              const providerId = String(connection.providerId ?? connection.provider_id ?? "");
+              const provider = providerById.get(providerId);
+              return <ConnectionRow key={String(connection.id ?? index)} connection={connection} {...(provider ? { provider } : {})} />;
+            })}</div>
           ) : <EmptyCopy title="No provider connections yet" copy="Connect a hosted or local model provider before sending live inference traffic." action="Configure providers" href="/providers" />}
         </section>
         <section className="panel">
@@ -52,7 +67,31 @@ export function OverviewPage() {
 }
 
 function Metric({ label, value, note, tone }: { label: string; value: string; note: string; tone: string }) { return <article className={`metric metric--${tone}`}><span>{label}</span><strong>{value}</strong><small>{note}</small></article>; }
-function ConnectionRow({ connection }: { connection: Record<string, unknown> }) { const enabled = connection.enabled !== false && connection.disabled !== true; return <article className="connection-row"><span className="connection-row__mark">{String(connection.providerId ?? connection.provider_id ?? "AI").slice(0, 2).toUpperCase()}</span><div><strong>{String(connection.name ?? "Provider connection")}</strong><small>{String(connection.providerId ?? connection.provider_id ?? "Custom adapter")}</small></div><Badge variant={enabled ? "success" : "neutral"} label={enabled ? "Enabled" : "Disabled"} /></article>; }
+
+function ConnectionRow({ connection, provider }: { connection: Record<string, unknown>; provider?: ProviderRecord }) {
+  const enabled = connection.enabled !== false && connection.disabled !== true;
+  const providerId = String(connection.providerId ?? connection.provider_id ?? provider?.id ?? "unknown");
+  const title = provider?.display_name ?? (providerId !== "unknown" ? providerId : "Custom adapter");
+  const iconBadge = providerIconBadge(providerId);
+  return (
+    <article className="connection-row">
+      <span className="connection-row__mark">
+        <ProviderIcon
+          providerId={providerId}
+          {...(provider?.icon_key ? { iconKey: provider.icon_key } : {})}
+          title={title}
+          {...(iconBadge ? { badge: iconBadge } : {})}
+        />
+      </span>
+      <div>
+        <strong>{String(connection.name ?? "Provider connection")}</strong>
+        <small>{providerId !== "unknown" ? providerId : "Custom adapter"}</small>
+      </div>
+      <Badge variant={enabled ? "success" : "neutral"} label={enabled ? "Enabled" : "Disabled"} />
+    </article>
+  );
+}
+
 function CompactRows({ rows, primary, fallback, status }: { rows: Array<Record<string, unknown>>; primary: string; fallback: string; status?: string }) { return <div className="compact-rows">{rows.slice(0, 5).map((row, index) => <article key={String(row.id ?? index)}><span className="compact-rows__index">{String(index + 1).padStart(2, "0")}</span><div><strong>{String(row[primary] ?? fallback)}</strong><small>{String(row.updatedAt ?? row.updated_at ?? row.createdAt ?? row.created_at ?? "Recently")}</small></div>{status ? <Badge variant="neutral" label={String(row[status] ?? "queued")} /> : null}</article>)}</div>; }
 function EmptyCopy({ title, copy, action, href }: { title: string; copy: string; action: string; href: string }) { return <div className="empty-copy"><span aria-hidden="true">·</span><h4>{title}</h4><p>{copy}</p><Link to={href}>{action} →</Link></div>; }
 function LoadingRows() { return <div className="loading-rows" aria-label="Loading"><i /><i /><i /></div>; }

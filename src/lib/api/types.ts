@@ -296,9 +296,84 @@ export interface TaskEvent { sequence: number; type: string; payload: unknown; c
 export interface TaskDetail { task: TaskRecord; events: TaskEvent[]; }
 export interface ApiKeyRecord { id: string; name: string; key_hint: string; scopes: string[]; model_allowlist: string[] | null; limits: Record<string, number>; disabled: boolean; expires_at: string | null; last_used_at: string | null; created_at: string; updated_at: string; }
 export interface ApiKeyReceipt { id: string; key: string; hint: string; }
-export interface UsageSummary { requests: number; successful: number; input_tokens: number; output_tokens: number; cost_usd: number; average_latency_ms: number; days: number; }
-export interface UsageRequest { id: string; protocol: string; requested_model: string; selected_model: string | null; selected_provider: string | null; status: string; attempt_count: number; prompt_tokens: number; completion_tokens: number; cost_usd: number; latency_ms: number; error_code: string | null; created_at: string; completed_at: string | null; }
-export interface UsageResponse { summary: UsageSummary; requests: UsageRequest[]; }
+export interface UsageSummary {
+  requests: number;
+  successful: number;
+  failed?: number;
+  cancelled?: number;
+  partial?: number;
+  success_rate?: number;
+  physical_attempts?: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens?: number;
+  cost_usd: number;
+  complete_cost_requests?: number;
+  partial_cost_requests?: number;
+  unknown_cost_requests?: number;
+  legacy_cost_requests?: number;
+  average_latency_ms: number;
+  days: number;
+}
+export type SourceProtocol =
+  | "openai-chat"
+  | "openai-responses"
+  | "anthropic-messages"
+  | "legacy-completions"
+  | "embeddings"
+  | "helmora-native";
+
+export type UsageSource = "provider" | "estimated" | "unknown";
+export type CostCoverage = "complete" | "partial" | "unknown";
+export type CostSource =
+  | "catalog_provider_usage"
+  | "catalog_estimated_usage"
+  | "unknown_pricing"
+  | "partial_pricing"
+  | "legacy_estimate";
+export interface UsageBucket {
+  date: string;
+  requests: number;
+  successful: number;
+  failed: number;
+  cancelled: number;
+  partial?: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+  complete_cost_requests?: number;
+  partial_cost_requests?: number;
+  unknown_cost_requests?: number;
+  legacy_cost_requests?: number;
+  average_latency_ms: number | null;
+}
+export interface UsageRequest {
+  id: string;
+  protocol: SourceProtocol | string;
+  requested_model: string;
+  selected_model: string | null;
+  selected_provider: string | null;
+  status: string;
+  attempt_count: number;
+  prompt_tokens: number;
+  completion_tokens: number;
+  total_tokens?: number;
+  cost_usd: number;
+  usage_source?: UsageSource;
+  cost_source?: CostSource;
+  cost_coverage?: CostCoverage;
+  cost_known?: boolean;
+  latency_ms: number;
+  error_code: string | null;
+  created_at: string;
+  completed_at: string | null;
+}
+export interface UsageResponse {
+  summary: UsageSummary;
+  buckets?: UsageBucket[];
+  requests: UsageRequest[];
+}
 export interface AuditEvent { id: string; actor_type: string; actor_id: string | null; action: string; target_type: string; target_id: string | null; request_id: string | null; outcome: string; metadata: Record<string, unknown>; created_at: string; }
 export interface ToolDefinition { name: string; description?: string; inputSchema?: Record<string, unknown>; input_schema?: Record<string, unknown>; risk: string; timeoutMs: number; [key: string]: unknown; }
 export interface WebhookRecord { id: string; url: string; events: string[]; enabled: boolean; createdAt: string; updatedAt: string; }

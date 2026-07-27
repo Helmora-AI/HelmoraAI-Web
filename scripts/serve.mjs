@@ -71,6 +71,7 @@ function serveStatic(method, pathname, response) {
   if (decoded.includes("\\") || decoded.split("/").some((segment) => segment.startsWith("."))) { response.writeHead(404).end(); return; }
   const requested = decoded === "/" ? "index.html" : decoded.replace(/^\/+/, "");
   const extension = extname(requested).toLowerCase();
+  // Extensioned paths (especially /assets/*) must 404 when missing — never SPA HTML.
   const selected = extension ? secureFile(requested) : secureFile(requested) ?? secureFile("index.html");
   if (!selected) { response.writeHead(404).end(); return; }
   response.writeHead(200, {

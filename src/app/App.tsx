@@ -2,6 +2,7 @@ import { Button } from "@astryxdesign/core";
 import { lazy, Suspense } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 import { Brand } from "../components/Brand";
+import { ChunkErrorBoundary } from "../components/ChunkErrorBoundary";
 import { AppShell } from "./AppShell";
 import { AuthProvider, useAuth } from "./auth/AuthContext";
 import { LoginPage } from "./auth/LoginPage";
@@ -32,7 +33,7 @@ function AuthGate() {
   if (auth.phase === "setup") return <SetupPage />;
   if (auth.phase === "anonymous") return <LoginPage />;
   if (auth.phase === "unreachable") return <OfflineScreen onRetry={auth.refresh} message={auth.error?.message ?? "Helmora Hub could not be reached."} />;
-  return <BrowserRouter><Suspense fallback={<PageLoader />}><Routes><Route element={<AppShell />}>
+  return <BrowserRouter><ChunkErrorBoundary><Suspense fallback={<PageLoader />}><Routes><Route element={<AppShell />}>
     <Route index element={<OverviewPage />} />
     <Route path="chat" element={<ChatPage />} />
     <Route path="conversations" element={<ConversationsPage />} />
@@ -49,7 +50,7 @@ function AuthGate() {
     <Route path="audit" element={<AuditPage />} />
     <Route path="runtime" element={<RuntimePage />} />
     <Route path="*" element={<Navigate to="/" replace />} />
-  </Route></Routes></Suspense></BrowserRouter>;
+  </Route></Routes></Suspense></ChunkErrorBoundary></BrowserRouter>;
 }
 
 function BootScreen() { return <main className="boot-screen" aria-busy="true" aria-label="Helmora is preparing"><Brand compact /><span className="boot-screen__line" /><p>Connecting to Helmora Hub</p></main>; }

@@ -1,6 +1,7 @@
 import { Badge, Button, TextInput } from "@astryxdesign/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { HelmoraScrollArea } from "../components/HelmoraScrollArea";
 import { RequestError } from "../components/InlineAlert";
 import { api } from "../lib/api/client";
 import type { Conversation, ConversationDetail, ConversationList, StoredMessage } from "../lib/api/types";
@@ -57,7 +58,7 @@ export function ConversationsPage() {
               <Button label="Export" variant="ghost" onClick={() => { void exportConversation(active.id); }} />
             </div>
             {mutationError ? <RequestError error={mutationError} /> : null}
-            <div className="conversation-preview">{detail.data.messages.length ? detail.data.messages.map((message) => <StoredMessageRow message={message} key={message.id} />) : <p className="muted-copy">No messages stored.</p>}</div>
+            <HelmoraScrollArea className="conversation-preview" aria-label="Conversation messages">{detail.data.messages.length ? detail.data.messages.map((message) => <StoredMessageRow message={message} key={message.id} />) : <p className="muted-copy">No messages stored.</p>}</HelmoraScrollArea>
             <footer className="detail-panel__footer">
               <Button label="Fork from latest" variant="secondary" isDisabled={!detail.data.messages.length} isLoading={fork.isPending} onClick={() => { const last = detail.data?.messages.at(-1); if (last) fork.mutate({ id: active.id, throughSequence: last.sequence }); }} />
               <Button label="Delete permanently" variant="destructive" isLoading={remove.isPending} onClick={() => { if (window.confirm(`Delete “${active.title}” and every stored message?`)) remove.mutate(active.id); }} />

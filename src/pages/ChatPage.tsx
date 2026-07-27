@@ -1,14 +1,16 @@
 import { Badge, Button } from "@astryxdesign/core";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent, type ReactNode, type UIEvent } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeSanitize from "rehype-sanitize";
 import { useSearchParams } from "react-router-dom";
 import remarkGfm from "remark-gfm";
+import { HelmoraScrollArea } from "../components/HelmoraScrollArea";
 import { InlineAlert, RequestError } from "../components/InlineAlert";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { api } from "../lib/api/client";
 import type { Conversation, ConversationDetail, ConversationList, ListResponse, ModelSummary, NativeChatResponse, ResponsesCompletedEvent, StoredMessage } from "../lib/api/types";
+import { distanceFromBottom, shouldFollowAfterScroll, shouldShowJumpToLatest } from "../lib/chatScrollFollow";
 import { modelSearchItem } from "../lib/searchableSelect";
 
 interface DraftMessage { id: string; role: "user" | "assistant"; text: string; pending?: boolean; }
@@ -30,6 +32,11 @@ export function ChatPage() {
   const [announcement, setAnnouncement] = useState("Ready for a message.");
   const [runNotice, setRunNotice] = useState<string>();
   const controller = useRef<AbortController | undefined>(undefined);
+  const transcriptViewportRef = useRef<HTMLDivElement>(null);
+  const followRef = useRef(true);
+  const scrollFrameRef = useRef(0);
+  const [following, setFollowing] = useState(true);
+  const [jumpVisible, setJumpVisible] = useState(false);
 
   const conversations = useQuery({ queryKey: ["conversations", "chat"], queryFn: () => api.request<ConversationList>("/api/v2/conversations?limit=50") });
   const detail = useQuery({ queryKey: ["conversation", conversationId], queryFn: () => api.request<ConversationDetail>(`/api/v2/conversations/${encodeURIComponent(conversationId!)}`), enabled: Boolean(conversationId) });
@@ -47,6 +54,59 @@ export function ChatPage() {
   const storedMessages = detail.data?.messages ?? [];
   const visibleMessages = useMemo(() => [...storedMessages.map(toDraftMessage), ...optimistic], [storedMessages, optimistic]);
 
+  useEffect(() => {
+    followRef.current = true;
+    setFollowing(true);
+    setJumpVisible(false);
+  }, [conversationId]);
+
+  useLayoutEffect(() => {
+    if (!followRef.current) {
+      const viewport = transcriptViewportRef.current;
+      if (viewport) {
+        setJumpVisible(shouldShowJumpToLatest(false, distanceFromBottom(viewport.scrollTop, viewport.clientHeight, viewport.scrollHeight) > 4));
+      }
+      return;
+    }
+    if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
+    scrollFrameRef.current = requestAnimationFrame(() => {
+      scrollFrameRef.current = 0;
+      const viewport = transcriptViewportRef.current;
+      if (!viewport || !followRef.current) return;
+      viewport.scrollTop = viewport.scrollHeight;
+      setJumpVisible(false);
+    });
+    return () => {
+      if (scrollFrameRef.current) cancelAnimationFrame(scrollFrameRef.current);
+    };
+  }, [visibleMessages, receipt, runNotice, error, running]);
+
+  function onTranscriptScroll(event: UIEvent<HTMLDivElement>) {
+    const viewport = event.currentTarget;
+    const nextFollow = shouldFollowAfterScroll({
+      previouslyFollowing: followRef.current,
+      scrollTop: viewport.scrollTop,
+      clientHeight: viewport.clientHeight,
+      scrollHeight: viewport.scrollHeight,
+    });
+    if (nextFollow !== followRef.current) {
+      followRef.current = nextFollow;
+      setFollowing(nextFollow);
+    }
+    setJumpVisible(shouldShowJumpToLatest(
+      nextFollow,
+      distanceFromBottom(viewport.scrollTop, viewport.clientHeight, viewport.scrollHeight) > 4,
+    ));
+  }
+
+  function jumpToLatest() {
+    followRef.current = true;
+    setFollowing(true);
+    setJumpVisible(false);
+    const viewport = transcriptViewportRef.current;
+    if (viewport) viewport.scrollTop = viewport.scrollHeight;
+  }
+
   async function send(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const text = draft.trim();
@@ -60,6 +120,9 @@ export function ChatPage() {
     setRunNotice(undefined);
     setAnnouncement("Helmora is responding.");
     setOptimistic([{ id: `local-user-${Date.now()}`, role: "user", text }, { id: `local-assistant-${Date.now()}`, role: "assistant", text: "", pending: true }]);
+    followRef.current = true;
+    setFollowing(true);
+    setJumpVisible(false);
     try {
       if (toolsEnabled || memoryEnabled) await sendNative(text, abort.signal);
       else await sendStreaming(text, abort.signal);
@@ -152,19 +215,29 @@ export function ChatPage() {
     else next.delete("conversation");
     setSearchParams(next, { replace: true });
   }
-  function selectConversation(id: string | undefined) { if (running) return; updateConversation(id); setOptimistic([]); setError(undefined); setReceipt(undefined); setRunNotice(undefined); }
+  function selectConversation(id: string | undefined) {
+    if (running) return;
+    updateConversation(id);
+    setOptimistic([]);
+    setError(undefined);
+    setReceipt(undefined);
+    setRunNotice(undefined);
+    followRef.current = true;
+    setFollowing(true);
+    setJumpVisible(false);
+  }
 
   return (
     <div className="chat-workspace">
       <aside className="chat-history">
         <div className="chat-history__header"><div><p className="eyebrow">Workspace</p><h2>Chat</h2></div><Button label="New chat" variant="secondary" size="sm" onClick={() => { selectConversation(undefined); }} /></div>
-        <div className="chat-history__list">
+        <HelmoraScrollArea className="chat-history__list" aria-label="Conversation history">
           {conversations.isPending ? <p className="muted-copy">Loading conversations…</p> : conversations.data?.data.length ? conversations.data.data.map((conversation) => (
             <button key={conversation.id} className={conversation.id === conversationId ? "chat-history__item chat-history__item--active" : "chat-history__item"} onClick={() => { selectConversation(conversation.id); }}>
               <strong>{conversation.title}</strong><small>{formatTime(conversation.updatedAt)}</small>
             </button>
           )) : <p className="muted-copy">No conversations yet.</p>}
-        </div>
+        </HelmoraScrollArea>
       </aside>
       <section className="chat-main">
         <header className="chat-toolbar">
@@ -186,13 +259,24 @@ export function ChatPage() {
             <Toggle label="Agent tools" checked={toolsEnabled} onChange={setToolsEnabled} disabled={running} />
           </div>
         </header>
-        <div className="chat-transcript" role="log" aria-label="Conversation messages" aria-busy={running}>
-          {detail.isPending && conversationId ? <p className="muted-copy">Loading conversation…</p> : visibleMessages.length ? visibleMessages.map((message) => <MessageBubble key={message.id} message={message} />) : <ChatEmpty modelsReady={Boolean(models.data?.data.length)} />}
-          {error ? <RequestError error={error} /> : null}
-          {runNotice ? <InlineAlert title="Generation stopped">{runNotice}</InlineAlert> : null}
-          {receipt ? <Receipt receipt={receipt} /> : null}
+        <div className="chat-transcript">
+          <HelmoraScrollArea
+            className="chat-transcript__scroll"
+            aria-label="Conversation messages"
+            role="log"
+            viewportRef={transcriptViewportRef}
+            onScroll={onTranscriptScroll}
+          >
+            <div aria-busy={running}>
+              {detail.isPending && conversationId ? <p className="muted-copy">Loading conversation…</p> : visibleMessages.length ? visibleMessages.map((message) => <MessageBubble key={message.id} message={message} />) : <ChatEmpty modelsReady={Boolean(models.data?.data.length)} />}
+              {error ? <RequestError error={error} /> : null}
+              {runNotice ? <InlineAlert title="Generation stopped">{runNotice}</InlineAlert> : null}
+              {receipt ? <Receipt receipt={receipt} /> : null}
+            </div>
+          </HelmoraScrollArea>
+          {jumpVisible ? <button type="button" className="chat-jump-latest" onClick={jumpToLatest}>Jump to latest</button> : null}
         </div>
-        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}</p>
+        <p className="sr-only" role="status" aria-live="polite" aria-atomic="true">{announcement}{following ? "" : " Auto-follow paused."}</p>
         <form className="composer" onSubmit={(event) => { void send(event); }}>
           <textarea value={draft} onChange={(event) => { setDraft(event.target.value); }} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} placeholder={model ? "Ask Helmora anything…" : "Configure a routed model to begin"} disabled={running || !model} rows={1} aria-label="Message" />
           <div className="composer__footer"><span>{toolsEnabled || memoryEnabled ? "Agent mode · buffered result" : "Direct mode · live stream"}</span>{running ? <Button label="Stop" variant="destructive" size="sm" onClick={stop} /> : <Button type="submit" label="Send" variant="primary" size="sm" isDisabled={!draft.trim() || !model} />}</div>

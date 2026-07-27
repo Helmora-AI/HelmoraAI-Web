@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { InlineAlert, RequestError } from "../components/InlineAlert";
+import { HelmoraScrollArea } from "../components/HelmoraScrollArea";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { api } from "../lib/api/client";
 import type {
@@ -262,13 +263,15 @@ export function ModelsRoutesPage() {
                 <Button label="Clear selection" size="sm" variant="ghost" isDisabled={discoverBusy} onClick={() => { setDiagnose((current) => current && current.connectionId === discoverConnectionId ? { ...current, selectedUpstreamIds: [] } : current); }} />
               </div>
             </div>
-            <ul className="discover-picker__list" role="listbox" aria-label="Discovered models">
+            <HelmoraScrollArea className="discover-picker__list" aria-label="Discovered models" role="listbox">
+              <ul>
               {pagedModels.map((id) => {
                 const imported = existingUpstream.has(id);
                 const checked = activeDiagnose.selectedUpstreamIds.includes(id);
                 return <li key={id}><label className={imported ? "discover-picker__row discover-picker__row--disabled" : "discover-picker__row"} title={id}><input type="checkbox" checked={imported ? true : checked} disabled={imported || discoverBusy} onChange={(event) => { toggleUpstream(id, event.target.checked); }} /><span className="discover-picker__id">{id}</span>{imported ? <Badge variant="neutral" label="Already imported" /> : null}</label></li>;
               })}
-            </ul>
+              </ul>
+            </HelmoraScrollArea>
             {pageCount > 1 ? <div className="discover-picker__pager"><Button label="Previous" size="sm" variant="ghost" isDisabled={modelPage <= 0 || discoverBusy} onClick={() => { setModelPage((page) => Math.max(0, page - 1)); }} /><span>Page {modelPage + 1} / {pageCount}</span><Button label="Next" size="sm" variant="ghost" isDisabled={modelPage >= pageCount - 1 || discoverBusy} onClick={() => { setModelPage((page) => Math.min(pageCount - 1, page + 1)); }} /></div> : null}
             <InlineAlert title="Discovery proves only that the provider listed these IDs. It does not prove capability, pricing, streaming, or Verify." tone="warning" />
             <Button label="Import selected" variant="primary" size="sm" isLoading={importMutation.isPending} isDisabled={activeDiagnose.selectedUpstreamIds.length === 0 || discoverBusy} onClick={() => { if (!discoverConnectionId || !activeDiagnose) return; importMutation.mutate({ id: discoverConnectionId, models: activeDiagnose.selectedUpstreamIds }); }} />

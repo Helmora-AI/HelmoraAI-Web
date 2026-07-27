@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { InlineAlert, RequestError } from "../components/InlineAlert";
+import { HelmoraScrollArea } from "../components/HelmoraScrollArea";
 import { ProviderIcon, providerIconBadge } from "../components/ProviderIcon";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { api } from "../lib/api/client";
@@ -506,7 +507,8 @@ function ConfigureModal({ provider, connections, initialConnectionId, onClose, o
                             <Button label="Clear selection" size="sm" variant="ghost" onClick={() => { setDiagnose((current) => current && current.connectionId === selection ? { ...current, selectedUpstreamIds: [] } : current); }} />
                           </div>
                         </div>
-                        <ul className="discover-picker__list" role="listbox" aria-label="Discovered models">
+                        <HelmoraScrollArea className="discover-picker__list" aria-label="Discovered models" role="listbox">
+                          <ul>
                           {pagedModels.map((id) => {
                             const imported = existingUpstream.has(id);
                             const checked = activeDiagnose.selectedUpstreamIds.includes(id);
@@ -520,7 +522,8 @@ function ConfigureModal({ provider, connections, initialConnectionId, onClose, o
                               </li>
                             );
                           })}
-                        </ul>
+                          </ul>
+                        </HelmoraScrollArea>
                         {pageCount > 1 ? (
                           <div className="discover-picker__pager">
                             <Button label="Previous" size="sm" variant="ghost" isDisabled={modelPage <= 0} onClick={() => { setModelPage((page) => Math.max(0, page - 1)); }} />

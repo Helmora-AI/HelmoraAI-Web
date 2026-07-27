@@ -301,7 +301,7 @@ test("direct SSE persists once, cancellation aborts upstream, and agent tools te
   await expect(page.locator(".message--assistant")).toContainText("segment-1");
   await expect(page.locator(".message--assistant")).toHaveCount(1);
   await page.goto(`${app.baseURL}/usage`);
-  await expect(page.locator(".request-list")).toContainText("cancelled");
+  await expect(page.locator(".usage-table")).toContainText("cancelled");
 
   await page.goto(`${app.baseURL}/chat`);
   await page.getByRole("button", { name: "New chat" }).click();

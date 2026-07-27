@@ -182,6 +182,63 @@ command `npm run build`, output directory `dist`, Node 24. Evidence for this
 proxy is local mock/contract tests plus production bundle/typecheck; it is not
 claimed as live-validated on Cloudflare until an operator deploys it.
 
+Static delivery contract for production `dist`:
+
+- Explicit Cloudflare SPA route rewrites in `public/_redirects` (no broad
+  `/*` catch-all) cover document routes such as `/chat` so missing `/assets/*`
+  paths fall through to a real 404 (`public/404.html`), never SPA HTML.
+- Hashed `/assets/*` use long-lived immutable caching via `public/_headers`.
+- HTML/app-shell targets (`/index.html`, `/`, `/404.html`) use
+  revalidate/no-cache headers in configuration so stale shells do not keep
+  referencing removed lazy chunks after deploy.
+- Local `npm start` (`scripts/serve.mjs`) is covered by local standalone server
+  tests (document routes, MIME, missing-asset 404, cache headers).
+- Cloudflare Pages `_headers`/`_redirects`/`_routes.json` are covered by a
+  configuration contract test against official Pages docs; this is not a live
+  Cloudflare deployment. Effective Cache-Control on 200 rewrite responses
+  remains a remaining live-deployment validation item. No live Cloudflare
+  deployment was performed in this patch.
+
+If a browser still holds an old shell after deploy, Web performs one guarded
+hard reload per build/path on Vite preload/dynamic-import chunk failure, then
+shows a recovery UI with a manual Reload action instead of a black screen.
+
+## Chat scroll and follow behavior
+
+- `/chat` is bounded to the viewport (`100dvh` with safe fallback); history and
+  transcript are independently bounded inside `HelmoraScrollArea`, with the
+  composer outside those scroll regions.
+- Native scrollbars remain visible and operable; keyboard, pointer, wheel,
+  touch, and horizontal scrolling stay native. The velocity thumb is decorative
+  only and respects `prefers-reduced-motion`.
+- Transcript smart-follow pauses when the reader scrolls up, resumes near the
+  bottom during streaming, and exposes a compact **Jump to latest** control.
+- Usage ledger uses the same native overflow model, including horizontal
+  overflow for wide request tables.
+- Browser evidence for these scroll surfaces covers Chromium and WebKit once
+  `e2e/scroll-containment.e2e.ts` passes with real scroll geometry assertions.
+
+## Usage monitoring semantics
+
+- Summary cards and charts use Hub full-period aggregation (`summary` +
+  UTC daily `buckets`).
+- The request ledger remains capped (`limit`, default 500 recent rows); charts
+  never derive from the capped ledger alone.
+- Logical request tokens describe the final/downstream request result; physical
+  attempts are individual outbound provider calls.
+- **Estimated cost** (`Known estimated cost (USD)`) is the sum of known
+  physical-attempt subtotals calculated from each attempt’s reported or safely
+  estimated usage and catalog pricing — monitoring estimation, not provider
+  billing truth. No live provider pricing fetch or billing reconciliation is
+  added.
+- Provenance and coverage distinguish:
+  - `complete` coverage: all persisted physical attempts have known accounting;
+  - `partial` coverage (`partial_pricing` label): displayed amount is only a known subtotal;
+  - `unknown` coverage (`unknown_pricing` label): no trustworthy subtotal; rendered as `Unknown` / `—`, never `$0.00`;
+  - `legacy_estimate`: legacy pre-migration request estimate rows;
+  - explicit known free cost remains `$0.00`.
+- Request inspector shows structured Overview/Usage/Attempts sections with physical attempt cost subtotals; raw JSON stays in a collapsed Advanced section only.
+
 ## Provider and model workflow
 
 Web preserves the lifecycle boundaries enforced by Hub:

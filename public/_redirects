@@ -1,0 +1,17 @@
+# Cloudflare Pages SPA rewrites for explicit document routes.
+# Missing static assets fall through to Cloudflare Pages 404 (404.html).
+/               /index.html  200
+/chat           /index.html  200
+/conversations  /index.html  200
+/research       /index.html  200
+/providers      /index.html  200
+/models         /index.html  200
+/tasks          /index.html  200
+/memory         /index.html  200
+/files          /index.html  200
+/knowledge      /index.html  200
+/tools          /index.html  200
+/api-keys       /index.html  200
+/usage          /index.html  200
+/audit          /index.html  200
+/runtime        /index.html  200

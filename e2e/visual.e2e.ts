@@ -29,7 +29,7 @@ test("release-critical desktop surfaces match approved visual baselines @visual"
   for (const [path, name, selectors] of [
     ["/providers", "providers-light.png", [".provider-card__note", ".provider-card__pill"]],
     ["/models", "models-routes-light.png", []],
-    ["/usage", "usage-light.png", [".request-list small", ".request-list article > div:nth-child(3)"]],
+    ["/usage", "usage-light.png", [".usage-table code", ".usage-table small", ".usage-ledger__note"]],
     ["/runtime", "runtime-light.png", [".runtime-board article:first-child p"]],
   ] as const) {
     await page.goto(`${app.baseURL}${path}`);
