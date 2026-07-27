@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { InlineAlert, RequestError } from "../components/InlineAlert";
 import { ProviderIcon, providerIconBadge } from "../components/ProviderIcon";
+import { SearchableSelect } from "../components/SearchableSelect";
 import { api } from "../lib/api/client";
 import type {
   ConnectionImportModelsResponse,
@@ -23,9 +24,20 @@ import {
   prefillVerifyAfterImport,
   type DiagnoseState,
 } from "../lib/modelDiscovery";
+import {
+  DEFAULT_PROVIDER_FILTERS,
+  deriveProtocolOptions,
+  deriveSourceOptions,
+  filterProviders,
+  providerFiltersActive,
+  type ProviderFilterState,
+} from "../lib/providerFilters";
+import { providerCardStatus, type ProviderCardStatus } from "../lib/providerStatus";
+import { connectionSearchItem, type HelmoraSearchItem } from "../lib/searchableSelect";
 
 export type { DiagnoseState };
 export { existingUpstreamIdsForProvider, filterDiscoveredModels, pageSlice, prefillVerifyAfterImport };
+export { providerCardStatus, type ProviderCardStatus };
 
 interface ConnectionDraft {
   name: string;
@@ -41,19 +53,6 @@ function buildDraft(provider: ProviderManifestSummary): ConnectionDraft {
 
 function prefillVerifyModel(provider: ProviderManifestSummary, connection: ProviderConnection | undefined): string {
   return connection?.verify?.model || provider.default_model || "";
-}
-
-export type ProviderCardStatus = "blocked" | "maintenance" | "not_configured" | "ready" | "attention";
-
-/** Locked mapping: blocked/maintenance never collapse into each other, and "ready" requires a live-verified connection. */
-export function providerCardStatus(
-  provider: Pick<ProviderManifestSummary, "availability">,
-  connections: ReadonlyArray<Pick<ProviderConnection, "verify">>,
-): ProviderCardStatus {
-  if (provider.availability === "blocked") return "blocked";
-  if (provider.availability === "coming_soon") return "maintenance";
-  if (connections.length === 0) return "not_configured";
-  return connections.some((connection) => connection.verify?.status === "ok") ? "ready" : "attention";
 }
 
 const STATUS_META: Record<ProviderCardStatus, { label: string; badge: BadgeVariant }> = {
@@ -102,21 +101,17 @@ export function availabilityMessage(provider: Pick<ProviderManifestSummary, "ava
 
 export function ProvidersPage() {
   const queryClient = useQueryClient();
-  const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<"all" | "active" | "coming_soon" | "blocked">("all");
+  const [filters, setFilters] = useState<ProviderFilterState>(DEFAULT_PROVIDER_FILTERS);
   const [selectedConnection, setSelectedConnection] = useState<Record<string, string>>({});
   const [configuringId, setConfiguringId] = useState<string>();
   const data = useQuery({ queryKey: ["providers"], queryFn: () => api.request<ProvidersResponse>("/api/v2/providers") });
   const providers = data.data?.providers ?? [];
-  const filtered = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    return providers.filter((provider) => {
-      if (filter !== "all" && provider.availability !== filter) return false;
-      if (!needle) return true;
-      return [provider.id, provider.display_name, provider.protocol, provider.source, ...(provider.aliases ?? [])].join(" ").toLowerCase().includes(needle);
-    });
-  }, [providers, query, filter]);
-  const grouped = useMemo(() => new Map(filtered.map((provider) => [provider.id, { provider, connections: data.data?.connections.filter((connection) => connection.provider_id === provider.id) ?? [] }])), [filtered, data.data]);
+  const connections = data.data?.connections ?? [];
+  const filtered = useMemo(() => filterProviders(providers, connections, filters), [providers, connections, filters]);
+  const grouped = useMemo(() => new Map(filtered.map((provider) => [provider.id, { provider, connections: connections.filter((connection) => connection.provider_id === provider.id) }])), [filtered, connections]);
+  const protocolOptions = useMemo(() => deriveProtocolOptions(providers), [providers]);
+  const sourceOptions = useMemo(() => deriveSourceOptions(providers), [providers]);
+  const filtersActive = providerFiltersActive(filters);
 
   const create = useMutation({
     mutationFn: ({ providerId, draft }: { providerId: string; draft: ConnectionDraft }) => {
@@ -166,8 +161,12 @@ export function ProvidersPage() {
   }
 
   const configuringProvider = configuringId ? providers.find((item) => item.id === configuringId) : undefined;
-  const configuringConnections = configuringId ? (data.data?.connections.filter((connection) => connection.provider_id === configuringId) ?? []) : [];
+  const configuringConnections = configuringId ? connections.filter((connection) => connection.provider_id === configuringId) : [];
   const configuringInitialId = configuringProvider ? selectedConnectionFor(configuringProvider.id, configuringConnections)?.id : undefined;
+
+  function updateFilter<K extends keyof ProviderFilterState>(key: K, value: ProviderFilterState[K]) {
+    setFilters((current) => ({ ...current, [key]: value }));
+  }
 
   return (
     <div className="page">
@@ -178,17 +177,28 @@ export function ProvidersPage() {
           <p>Secrets stay encrypted inside Hub. Diagnose checks connectivity and may list models; Verify is a chat probe required before Enable. Import never runs automatically.</p>
         </div>
       </section>
-      <section className="panel provider-toolbar">
-        <TextInput label="Search catalog" value={query} onChange={setQuery} placeholder="Name, id, source…" isOptional />
-        <label className="native-field"><span>Availability</span><select value={filter} onChange={(event) => { setFilter(event.target.value as typeof filter); }}><option value="all">All ({providers.length})</option><option value="active">Active ({activeCount})</option><option value="coming_soon">Coming Soon ({soonCount})</option><option value="blocked">Blocked ({blockedCount})</option></select></label>
+      <section className="panel provider-toolbar provider-toolbar--detailed">
+        <TextInput label="Search catalog" value={filters.search} onChange={(value) => { updateFilter("search", value); }} placeholder="Name, id, source, protocol, capability…" isOptional />
+        <label className="native-field"><span>Availability</span><select value={filters.availability} onChange={(event) => { updateFilter("availability", event.target.value as ProviderFilterState["availability"]); }}><option value="all">All ({providers.length})</option><option value="active">Active ({activeCount})</option><option value="coming_soon">Coming Soon ({soonCount})</option><option value="blocked">Blocked ({blockedCount})</option></select></label>
+        <label className="native-field"><span>Connection state</span><select value={filters.connectionState} onChange={(event) => { updateFilter("connectionState", event.target.value as ProviderFilterState["connectionState"]); }}><option value="any">Any</option><option value="not_configured">Not configured</option><option value="has_connections">Has connections</option><option value="has_enabled">Has an enabled connection</option><option value="all_disabled">Configured but all connections disabled</option></select></label>
+        <label className="native-field"><span>Verification</span><select value={filters.verification} onChange={(event) => { updateFilter("verification", event.target.value as ProviderFilterState["verification"]); }}><option value="any">Any</option><option value="ready">Ready</option><option value="attention">Attention</option></select></label>
+        <label className="native-field"><span>Protocol</span><select value={filters.protocol} onChange={(event) => { updateFilter("protocol", event.target.value); }}><option value="">All</option>{protocolOptions.map((protocol) => <option key={protocol} value={protocol}>{protocol}</option>)}</select></label>
+        <label className="native-field"><span>Source</span><select value={filters.source} onChange={(event) => { updateFilter("source", event.target.value); }}><option value="">All</option>{sourceOptions.map((source) => <option key={source} value={source}>{source}</option>)}</select></label>
+        <label className="native-field"><span>Tier</span><select value={filters.tier === "all" ? "all" : String(filters.tier)} onChange={(event) => { const value = event.target.value; updateFilter("tier", value === "all" ? "all" : Number(value) as 1 | 2 | 3); }}><option value="all">All</option><option value="1">Tier 1</option><option value="2">Tier 2</option><option value="3">Tier 3</option></select></label>
+        <div className="provider-toolbar__meta">
+          <span>{filtered.length} of {providers.length} providers</span>
+          {filtersActive ? <Button label="Clear filters" size="sm" variant="ghost" onClick={() => { setFilters(DEFAULT_PROVIDER_FILTERS); }} /> : null}
+        </div>
       </section>
       {error ? <RequestError error={error} /> : null}
-      {data.error ? <RequestError error={data.error} /> : data.isPending ? <p className="muted-copy">Loading provider catalog…</p> : (
-        <div className="provider-grid">{[...grouped.values()].map(({ provider, connections }) => <ProviderCard
+      {data.error ? <RequestError error={data.error} /> : data.isPending ? <p className="muted-copy">Loading provider catalog…</p> : filtered.length === 0 ? (
+        <InlineAlert title="No providers match these filters" tone="info"><p className="muted-copy">Adjust search or filters, or clear them to see the full catalog.</p></InlineAlert>
+      ) : (
+        <div className="provider-grid">{[...grouped.values()].map(({ provider, connections: owned }) => <ProviderCard
           key={provider.id}
           provider={provider}
-          connections={connections}
-          selected={selectedConnectionFor(provider.id, connections)}
+          connections={owned}
+          selected={selectedConnectionFor(provider.id, owned)}
           onSelectConnection={(id) => { setSelectedConnection((current) => ({ ...current, [provider.id]: id })); }}
           onConfigure={() => { setConfiguringId(provider.id); }}
           onVerify={(connection, model) => { verify.mutate({ id: connection.id, model }); }}
@@ -288,6 +298,20 @@ function ConfigureModal({ provider, connections, initialConnectionId, onClose, o
   const queryClient = useQueryClient();
   const [selection, setSelection] = useState<string>(initialConnectionId && connections.some((item) => item.id === initialConnectionId) ? initialConnectionId : "new");
   const editing = selection === "new" ? undefined : connections.find((item) => item.id === selection);
+  const connectionItems = useMemo((): HelmoraSearchItem[] => {
+    const items: HelmoraSearchItem[] = [
+      { id: "new", label: "+ New connection", auxiliaryData: { keywords: ["new", "create"] } },
+      ...connections.map((connection) => {
+        const item = connectionSearchItem(connection);
+        return {
+          ...item,
+          label: `${connection.name}${connection.enabled ? " · enabled" : ""}`,
+          auxiliaryData: { keywords: [...(item.auxiliaryData?.keywords ?? []), connection.enabled ? "enabled" : "disabled"] },
+        };
+      }),
+    ];
+    return items;
+  }, [connections]);
   const [draft, setDraft] = useState<ConnectionDraft>(() => buildDraft(provider));
   const [apiKey, setApiKey] = useState("");
   const [verifyModel, setVerifyModel] = useState(() => prefillVerifyModel(provider, editing));
@@ -336,7 +360,27 @@ function ConfigureModal({ provider, connections, initialConnectionId, onClose, o
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selection]);
   useEffect(() => {
-    const close = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); };
+    const close = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+
+      // Bubble phase: Typeahead may have already preventDefault()'d Escape to
+      // restore a token or dismiss its menu. Honor that, and treat an open
+      // popover menu as owned by Typeahead. (Closed popovers can leave a
+      // [role=listbox] node in the DOM — only :popover-open counts.)
+      const menuOpen = Boolean(document.querySelector(":popover-open"));
+      if (event.defaultPrevented || menuOpen) {
+        requestAnimationFrame(() => {
+          Array.from(document.querySelectorAll(":popover-open")).forEach((node) => {
+            if (node instanceof HTMLElement) {
+              try { node.hidePopover(); } catch { /* already closed */ }
+            }
+          });
+        });
+        return;
+      }
+
+      onClose();
+    };
     document.addEventListener("keydown", close);
     return () => { document.removeEventListener("keydown", close); };
   }, [onClose]);
@@ -401,7 +445,19 @@ function ConfigureModal({ provider, connections, initialConnectionId, onClose, o
       <section className="modal-panel modal-panel--wide" role="dialog" aria-modal="true" aria-label={`Configure ${provider.display_name}`}>
         <header><div><p className="eyebrow">Configure</p><h3>{provider.display_name}</h3></div><Button label="Close" variant="ghost" size="sm" onClick={onClose} /></header>
         {blocked ? <InlineAlert title={availabilityMessage(provider)} tone="info" /> : <>
-          <label className="native-field connection-picker"><span>Connection</span><select value={selection} onChange={(event) => { setSelection(event.target.value); if (event.target.value !== "new") onSelect(event.target.value); }}><option value="new">+ New connection</option>{connections.map((connection) => <option value={connection.id} key={connection.id}>{connection.name}{connection.enabled ? " · enabled" : ""}</option>)}</select></label>
+          {connections.length > 0 ? (
+            <SearchableSelect
+              label="Connection"
+              items={connectionItems}
+              value={selection}
+              onChange={(id) => { setSelection(id || "new"); if (id && id !== "new") onSelect(id); }}
+              placeholder="Search connections…"
+              emptySearchResultsText="No connections match"
+              hasClear={false}
+            />
+          ) : (
+            <label className="native-field connection-picker"><span>Connection</span><select value={selection} onChange={(event) => { setSelection(event.target.value); if (event.target.value !== "new") onSelect(event.target.value); }}><option value="new">+ New connection</option></select></label>
+          )}
           {selection === "new" ? (
             <div className="form-grid">
               <TextInput label="Connection name" value={draft.name} onChange={(value) => { setDraft((current) => ({ ...current, name: value })); }} isRequired />

@@ -6,8 +6,10 @@ import rehypeSanitize from "rehype-sanitize";
 import { useSearchParams } from "react-router-dom";
 import remarkGfm from "remark-gfm";
 import { InlineAlert, RequestError } from "../components/InlineAlert";
+import { SearchableSelect } from "../components/SearchableSelect";
 import { api } from "../lib/api/client";
 import type { Conversation, ConversationDetail, ConversationList, ListResponse, ModelSummary, NativeChatResponse, ResponsesCompletedEvent, StoredMessage } from "../lib/api/types";
+import { modelSearchItem } from "../lib/searchableSelect";
 
 interface DraftMessage { id: string; role: "user" | "assistant"; text: string; pending?: boolean; }
 interface RunCitation { id: string; url: string; title: string; snippet?: string; }
@@ -166,10 +168,19 @@ export function ChatPage() {
       </aside>
       <section className="chat-main">
         <header className="chat-toolbar">
-          <label><span>Model</span><select value={model} onChange={(event) => { setModel(event.target.value); }} disabled={running || models.isPending}>
-            {models.data?.data.map((item) => <option value={item.id} key={item.id}>{item.displayName ?? item.id}</option>)}
-            {!models.data?.data.length ? <option value="">No routed models</option> : null}
-          </select></label>
+          <div className="chat-toolbar__model">
+            <SearchableSelect
+              label="Model"
+              items={(models.data?.data ?? []).map((item) => modelSearchItem(item))}
+              value={model}
+              onChange={setModel}
+              placeholder={models.data?.data.length ? "Search routed models…" : "No routed models"}
+              isDisabled={running || models.isPending || !models.data?.data.length}
+              disabledMessage={running ? "Model cannot change while generation is running." : models.isPending ? "Loading routed models…" : "No routed models available."}
+              emptySearchResultsText="No routed models match"
+              hasClear={false}
+            />
+          </div>
           <div className="chat-toggles">
             <Toggle label="Memory" checked={memoryEnabled} onChange={setMemoryEnabled} disabled={running} />
             <Toggle label="Agent tools" checked={toolsEnabled} onChange={setToolsEnabled} disabled={running} />

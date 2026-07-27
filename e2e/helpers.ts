@@ -1,9 +1,79 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { OWNER, SETUP_TOKEN, type BrowserApp } from "./fixtures";
 
 export interface AdminSession {
   cookie: string;
   csrf: string;
+}
+
+/** Select a closed-set Astryx Typeahead option by accessible label and search query. */
+export async function selectTypeahead(
+  scope: Page | Locator,
+  label: string,
+  query: string,
+  optionName?: string | RegExp,
+): Promise<void> {
+  const host = "goto" in scope ? scope : scope.page();
+  const field = scope.getByRole("combobox", { name: label });
+  const wrapper = scope
+    .locator(".helmora-searchable-select, .chat-toolbar__model")
+    .filter({ has: scope.getByRole("combobox", { name: label }) })
+    .first();
+
+  const token = wrapper.getByRole("button").first();
+  // Prefer the selected token when present — WebKit can still report the hidden
+  // combobox as having a non-zero box while Playwright click waits forever.
+  if ((await token.count()) > 0 && await token.isVisible()) {
+    await token.click();
+    await expect.poll(async () => isComboboxInteractable(field)).toBe(true);
+  } else if (await isComboboxInteractable(field)) {
+    await field.click();
+  } else {
+    await wrapper.click();
+    await expect.poll(async () => isComboboxInteractable(field)).toBe(true);
+  }
+
+  await field.fill(query);
+  const listbox = host.getByRole("listbox");
+  await expect(listbox).toBeVisible();
+  // Prefer an explicit option accessible name when provided; otherwise match the
+  // query as a literal substring (IDs like "browser:model" are not word-boundary safe).
+  const name = optionName ?? new RegExp(escapeRegExp(query), "i");
+  let optionLocator = listbox.getByRole("option", { name });
+  if ((await optionLocator.count()) === 0) {
+    // Query may not match label (e.g. id vs display name). Fall back to full list.
+    await field.fill("");
+    await field.press("ArrowDown");
+    optionLocator = listbox.getByRole("option", { name });
+  }
+  await expect(optionLocator.first()).toBeVisible();
+  await optionLocator.first().click();
+}
+
+/** Assert a Typeahead shows the selected label/id in its control (token or value). */
+export async function expectTypeaheadSelection(scope: Page | Locator, label: string, text: string | RegExp): Promise<void> {
+  const labeled = scope.locator(".helmora-searchable-select, .chat-toolbar__model").filter({ hasText: label }).first();
+  await expect(labeled.getByText(text).first()).toBeVisible();
+}
+
+async function isComboboxInteractable(field: Locator): Promise<boolean> {
+  try {
+    return await field.evaluate((el) => {
+      const style = window.getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      return style.opacity !== "0"
+        && style.visibility !== "hidden"
+        && style.display !== "none"
+        && rect.width >= 2
+        && rect.height >= 2;
+    });
+  } catch {
+    return false;
+  }
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 export async function seedOwner(app: BrowserApp): Promise<AdminSession> {

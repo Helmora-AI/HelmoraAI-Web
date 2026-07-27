@@ -10,6 +10,12 @@ export interface HelmoraErrorPayload {
   };
 }
 
+export interface HealthResponse {
+  status: string;
+  version?: string;
+  uptime_seconds?: number;
+}
+
 export interface ReadyResponse {
   status: "ready" | "draining" | "unhealthy";
   initialized: boolean;

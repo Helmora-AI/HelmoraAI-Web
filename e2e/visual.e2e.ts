@@ -54,13 +54,23 @@ test("release-critical mobile shell matches approved visual baseline @mobile @vi
 
 async function visual(page: Page, name: string, masks: Locator[] = [], fullPage = true): Promise<void> {
   await page.locator(".route-loader").waitFor({ state: "detached" }).catch(() => {});
+  // Fixture aborts Google Fonts; settle with a bound so screenshot font waits cannot hang.
+  await page.evaluate(async () => {
+    await Promise.race([
+      document.fonts.ready.catch(() => undefined),
+      new Promise<void>((resolve) => { window.setTimeout(resolve, 400); }),
+    ]);
+  }).catch(() => {});
   await page.waitForTimeout(50);
+  const latency = page.locator(".hub-latency");
+  const mask = (await latency.count()) > 0 ? [...masks, latency] : masks;
   await expect(page).toHaveScreenshot(name, {
     fullPage,
     animations: "disabled",
     caret: "hide",
-    mask: masks,
+    mask,
     maskColor: "#ece9e3",
     maxDiffPixelRatio: 0.001,
+    timeout: 15_000,
   });
 }

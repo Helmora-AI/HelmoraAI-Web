@@ -6,7 +6,7 @@ import {
   isEnvironmentManagedRevision,
   selectableNewModels,
 } from "../lib/modelDiscovery";
-import { deleteModelConfirmMessage, draftFromModel } from "./ModelsRoutesPage";
+import { connectionOptions, deleteModelConfirmMessage, draftFromModel } from "./ModelsRoutesPage";
 import { buildModelUpsertBody } from "../lib/modelUpsert";
 import type { ModelDefinition } from "../lib/api/types";
 
@@ -169,6 +169,19 @@ describe("model edit and delete helpers", () => {
     expect((body.capabilities as ModelDefinition["capabilities"]).streaming).toBe(true);
     expect((body.capabilities as ModelDefinition["capabilities"]).structuredOutput).toBe(true);
     expect(body.pricing).toEqual({});
+  });
+
+  it("recomputes compatible connections when the route model changes", () => {
+    const models = [
+      model({ id: "groq:a", providerId: "groq", upstreamId: "a" }),
+      model({ id: "ollama:b", providerId: "ollama", upstreamId: "b" }),
+    ];
+    const connections = [
+      { id: "c-groq", provider_id: "groq", name: "Groq" },
+      { id: "c-ollama", provider_id: "ollama", name: "Local" },
+    ];
+    expect(connectionOptions("groq:a", models, connections as never).map((item) => item.id)).toEqual(["c-groq"]);
+    expect(connectionOptions("ollama:b", models, connections as never).map((item) => item.id)).toEqual(["c-ollama"]);
   });
 
   it("warns when hard-deleting environment-managed models", () => {

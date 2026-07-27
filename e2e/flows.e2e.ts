@@ -1,5 +1,5 @@
 import { test, expect, OWNER, SETUP_TOKEN } from "./fixtures";
-import { adminJson, loginThroughUi, seedModelRoute, seedOwner } from "./helpers";
+import { adminJson, expectTypeaheadSelection, loginThroughUi, seedModelRoute, seedOwner, selectTypeahead } from "./helpers";
 
 test.use({ trace: "off", screenshot: "off", video: "off" });
 
@@ -132,7 +132,7 @@ test("provider, model, route and one-time API-key administration work through th
 
   await page.goto(`${app.baseURL}/models`);
   await page.getByRole("button", { name: "Add model" }).click();
-  await page.getByLabel("Catalog provider").selectOption("ollama");
+  await selectTypeahead(page, "Catalog provider", "ollama");
   await page.getByLabel("Upstream model ID").fill("fixture-chat");
   await page.getByLabel("Helmora model ID").fill("browser:model");
   await page.getByLabel("Display name").fill("Browser model");
@@ -144,7 +144,7 @@ test("provider, model, route and one-time API-key administration work through th
   await page.getByRole("tab", { name: "Route profiles 0" }).click();
   await page.getByRole("button", { name: "Add route" }).click();
   await page.getByLabel("Route ID").fill("browser-route");
-  await page.getByLabel("Model").selectOption("browser:model");
+  await selectTypeahead(page, "Model", "Browser model", /Browser model|browser:model/i);
   await page.getByRole("button", { name: "Save route" }).click();
   await expect(page.getByText("browser-route", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Simulate" }).click();
@@ -187,8 +187,8 @@ test("models diagnose import edit enable disable and hard delete work through th
   await loginThroughUi(page, app);
 
   await page.goto(`${app.baseURL}/models`);
-  await page.getByLabel("Diagnose provider").selectOption("ollama");
-  await page.getByLabel("Diagnose connection").selectOption(String(connection.id));
+  await selectTypeahead(page, "Diagnose provider", "ollama");
+  await selectTypeahead(page, "Diagnose connection", String(connection.id));
   await page.getByRole("button", { name: "Diagnose", exact: true }).click();
   await expect(page.getByText("available", { exact: true })).toBeVisible();
   await expect(page.getByText("fixture-extra", { exact: true }).first()).toBeVisible();
@@ -272,7 +272,7 @@ test("direct SSE persists once, cancellation aborts upstream, and agent tools te
   await seedModelRoute(app, session);
   await loginThroughUi(page, app);
   await page.goto(`${app.baseURL}/chat`);
-  await expect(page.getByLabel("Model")).toHaveValue("fixture-route");
+  await expectTypeaheadSelection(page, "Model", /fixture-route|Fixture model/i);
 
   await page.getByLabel("Message", { exact: true }).fill("Hello over a split CRLF stream");
   await page.getByRole("button", { name: "Send" }).click();

@@ -5,7 +5,13 @@ import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { Brand } from "../components/Brand";
 import { FunctionIcon, type FunctionIconName } from "../components/FunctionIcon";
 import { api } from "../lib/api/client";
-import type { RuntimeStatus } from "../lib/api/types";
+import type { HealthResponse } from "../lib/api/types";
+import {
+  HUB_LATENCY_POLL_MS,
+  formatHubLatencyLabel,
+  hubLatencyAccessibleName,
+  roundLatencyMs,
+} from "../lib/hubLatency";
 import { useAuth } from "./auth/AuthContext";
 import { useThemePreference, type ThemePreference } from "./providers";
 
@@ -45,7 +51,17 @@ export function AppShell() {
   const { preference, setPreference } = useThemePreference();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const runtime = useQuery({ queryKey: ["runtime-status"], queryFn: () => api.request<RuntimeStatus>("/api/v2/runtime/status"), refetchInterval: 30_000 });
+  const latency = useQuery({
+    queryKey: ["hub-latency"],
+    queryFn: async ({ signal }) => {
+      const started = performance.now();
+      await api.request<HealthResponse>("/health", { signal });
+      return { latencyMs: roundLatencyMs(started, performance.now()) };
+    },
+    refetchInterval: HUB_LATENCY_POLL_MS,
+    refetchIntervalInBackground: false,
+    retry: false,
+  });
   const title = useMemo(() => {
     const exact = TITLES.get(location.pathname);
     if (exact) return exact;
@@ -95,7 +111,10 @@ export function AppShell() {
             <div><p className="topbar__crumb">Helmora Hub</p><h1>{title}</h1></div>
           </div>
           <div className="topbar__actions">
-            <RuntimeBadge state={runtime.status} {...(runtime.data === undefined ? {} : { value: runtime.data })} />
+            <HubLatencyBadge
+              state={latency.isError ? "error" : latency.isSuccess ? "success" : "pending"}
+              {...(latency.data?.latencyMs === undefined ? {} : { latencyMs: latency.data.latencyMs })}
+            />
             <ThemeControl preference={preference} setPreference={setPreference} />
           </div>
         </header>
@@ -105,10 +124,13 @@ export function AppShell() {
   );
 }
 
-function RuntimeBadge({ state, value }: { state: "pending" | "error" | "success"; value?: RuntimeStatus }) {
-  if (state === "pending") return <Badge variant="neutral" label="Checking Hub" />;
-  if (state === "error") return <Badge variant="error" label="Hub unavailable" />;
-  return <Badge variant={value?.status === "ready" ? "success" : "warning"} label={value?.status === "ready" ? "Hub ready" : "Hub draining"} />;
+function HubLatencyBadge({ state, latencyMs }: { state: "pending" | "error" | "success"; latencyMs?: number }) {
+  const variant = state === "success" ? "success" : state === "error" ? "error" : "neutral";
+  // On error, never pass a prior success ms into the label formatter for the visible badge text.
+  const visibleMs = state === "success" ? latencyMs : undefined;
+  const label = formatHubLatencyLabel(state, visibleMs);
+  const title = hubLatencyAccessibleName(state, visibleMs);
+  return <div className="hub-latency" title={title} aria-label={title}><Badge variant={variant} label={label} /></div>;
 }
 
 function ThemeControl({ preference, setPreference }: { preference: ThemePreference; setPreference: (value: ThemePreference) => void }) {

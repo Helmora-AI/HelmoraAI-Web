@@ -57,10 +57,13 @@ Highlights:
   delete.
 - Provider cards expose Active, Coming Soon and Blocked catalog states plus
   Ready/Attention operational state. Configure supports Save, Save & Verify,
-  Diagnose and Import.
-- Models & routes includes Diagnose quick-add, search/filter, metadata editing
-  with locked identity fields, Enable/Disable, hard Delete and route
-  simulation.
+  Diagnose and Import. `/providers` includes detailed local filters
+  (availability, connection state, verification, protocol, source, tier).
+- Models & routes includes Diagnose quick-add, searchable provider/model/
+  connection selectors, catalog search/filter, metadata editing with locked
+  identity fields, Enable/Disable, hard Delete and route simulation.
+- Chat routed-model control is a searchable Typeahead; the top bar shows Hub
+  `/health` round-trip latency every five seconds.
 - Provider forms are driven by Hub `config_fields`; multi-connection state is
   isolated to the selected connection.
 - Light, dark and system themes, responsive navigation, lazy-loaded

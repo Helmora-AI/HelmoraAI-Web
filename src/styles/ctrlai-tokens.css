@@ -91,7 +91,31 @@ button, input, textarea, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 a:not([class]) { color: var(--ctrl-control); text-underline-offset: 3px; }
 ::selection { background: var(--ctrl-control-soft); color: var(--ctrl-text); }
+/* Visible keyboard focus for bare interactive controls. Astryx fields and
+   Helmora native wrappers own their own rounded focus treatment below. */
 :where(a, button, input, textarea, select, summary):focus-visible { outline: 2px solid var(--ctrl-control); outline-offset: 3px; }
+
+/* Astryx TextInput / Typeahead / TextArea put outline:none on the inner control
+   and paint rounded focus via the wrapper :focus-within. Because Astryx CSS is
+   layered and this file is unlayered, the global rule above would otherwise
+   win and draw a square outline around the native input. */
+.astryx-text-input :is(input, textarea):focus-visible,
+.astryx-typeahead :is(input, textarea):focus-visible,
+.astryx-textarea :is(input, textarea):focus-visible,
+.astryx-number-input :is(input):focus-visible {
+  outline: none;
+  outline-offset: 0;
+}
+
+/* Native Helmora fields and the chat composer already use border + box-shadow
+   on the rounded control; suppress the second square outline. */
+.native-field :is(input, textarea, select):focus-visible,
+.composer textarea:focus-visible,
+.chat-toolbar :is(select, .astryx-typeahead input):focus-visible,
+.helmora-searchable-select :is(input, textarea):focus-visible {
+  outline: none;
+  outline-offset: 0;
+}
 
 .eyebrow {
   margin: 0 0 8px;

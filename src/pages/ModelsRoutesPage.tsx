@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { InlineAlert, RequestError } from "../components/InlineAlert";
+import { SearchableSelect } from "../components/SearchableSelect";
 import { api } from "../lib/api/client";
 import type {
   ConnectionImportModelsResponse,
@@ -25,6 +26,7 @@ import {
   type DiagnoseState,
 } from "../lib/modelDiscovery";
 import { buildModelUpsertBody, type ModelDraft } from "../lib/modelUpsert";
+import { connectionSearchItem, modelSearchItem, providerSearchItem } from "../lib/searchableSelect";
 
 export type { ModelDraft };
 export { buildModelUpsertBody } from "../lib/modelUpsert";
@@ -92,6 +94,21 @@ export function ModelsRoutesPage() {
   const discoverConnections = useMemo(
     () => connectionsForProvider(providers.data?.connections ?? [], discoverProviderId),
     [providers.data?.connections, discoverProviderId],
+  );
+  const enabledModels = useMemo(() => (models.data?.data ?? []).filter((item) => item.enabled !== false), [models.data?.data]);
+  const discoverProviderItems = useMemo(() => activeProviders.map(providerSearchItem), [activeProviders]);
+  const discoverConnectionItems = useMemo(() => discoverConnections.map(connectionSearchItem), [discoverConnections]);
+  const catalogProviderItems = useMemo(() => {
+    const items = activeProviders.map(providerSearchItem);
+    if (editingId && modelDraft.providerId && !activeProviders.some((provider) => provider.id === modelDraft.providerId)) {
+      items.push({ id: modelDraft.providerId, label: modelDraft.providerId, auxiliaryData: { keywords: [modelDraft.providerId] } });
+    }
+    return items;
+  }, [activeProviders, editingId, modelDraft.providerId]);
+  const routeModelItems = useMemo(() => enabledModels.map(modelSearchItem), [enabledModels]);
+  const routeConnectionItems = useMemo(
+    () => connectionOptions(routeDraft.modelId, enabledModels, providers.data?.connections ?? []).map(connectionSearchItem),
+    [routeDraft.modelId, enabledModels, providers.data?.connections],
   );
 
   useEffect(() => {
@@ -169,7 +186,6 @@ export function ModelsRoutesPage() {
 
   const error = createOrUpdateModel.error ?? disableModel.error ?? enableModel.error ?? deleteModel.error ?? createRoute.error ?? deleteRoute.error ?? simulate.error ?? diagnoseMutation.error ?? importMutation.error;
   const modelSubmitDisabled = !modelDraft.providerId || !modelDraft.upstreamId || Number(modelDraft.contextWindow) < 1 || Number(modelDraft.maxOutputTokens) < 1 || (!editingId && !activeProviders.some((provider) => provider.id === modelDraft.providerId));
-  const enabledModels = useMemo(() => (models.data?.data ?? []).filter((item) => item.enabled !== false), [models.data?.data]);
   const filteredCatalog = useMemo(() => filterCatalogModels(models.data?.data ?? [], catalogQuery), [models.data?.data, catalogQuery]);
   const activeDiagnose = diagnose && diagnose.connectionId === discoverConnectionId ? diagnose : undefined;
   const activeImport = importResult && importResult.connectionId === discoverConnectionId ? importResult : undefined;
@@ -224,8 +240,8 @@ export function ModelsRoutesPage() {
     {view === "models" ? <section className="panel create-panel discover-panel">
       <header><p className="eyebrow">Add / discover</p><h3>Diagnose a connection and import upstream model IDs</h3></header>
       <div className="form-grid form-grid--three">
-        <label className="native-field"><span>Diagnose provider</span><select value={discoverProviderId} disabled={discoverBusy} onChange={(event) => { setDiscoverProviderId(event.target.value); }}><option value="">Select provider…</option>{activeProviders.map((provider) => <option key={provider.id} value={provider.id}>{provider.display_name}</option>)}</select></label>
-        <label className="native-field"><span>Diagnose connection</span><select value={discoverConnectionId} disabled={!discoverProviderId || discoverBusy} onChange={(event) => { setDiscoverConnectionId(event.target.value); }}><option value="">Select connection…</option>{discoverConnections.map((connection) => <option key={connection.id} value={connection.id}>{connection.name}</option>)}</select></label>
+        <SearchableSelect label="Diagnose provider" items={discoverProviderItems} value={discoverProviderId} onChange={setDiscoverProviderId} placeholder="Select provider…" isDisabled={discoverBusy} emptySearchResultsText="No providers match" />
+        <SearchableSelect label="Diagnose connection" items={discoverConnectionItems} value={discoverConnectionId} onChange={setDiscoverConnectionId} placeholder="Select connection…" isDisabled={!discoverProviderId || discoverBusy} emptySearchResultsText="No connections match" {...(!discoverProviderId ? { disabledMessage: "Choose a provider first." } : {})} />
         <div className="form-grid__action"><Button label="Diagnose" variant="secondary" isLoading={diagnoseMutation.isPending} isDisabled={!discoverConnectionId || discoverBusy} onClick={() => { if (discoverConnectionId) diagnoseMutation.mutate(discoverConnectionId); }} /></div>
       </div>
       {discoverProviderId && discoverConnections.length === 0 ? <InlineAlert title="No connections for this provider yet." tone="info"><p className="muted-copy">Create one on the <Link className="text-link" to="/providers">Providers</Link> page, then return here to Diagnose.</p></InlineAlert> : null}
@@ -263,7 +279,7 @@ export function ModelsRoutesPage() {
     </section> : null}
 
     {showForm && view === "models" ? <section className="panel create-panel"><header><p className="eyebrow">{editingId ? "Edit catalog model" : "Catalog definition"}</p><h3>{editingId ? "Update model metadata" : "Register a model"}</h3></header><form className="form-grid form-grid--three" onSubmit={submitModel}>
-      <label className="native-field"><span>Catalog provider</span><select value={modelDraft.providerId} disabled={Boolean(editingId)} onChange={(event) => { setModelField("providerId", event.target.value); }} required><option value="">Select provider…</option>{activeProviders.map((provider) => <option key={provider.id} value={provider.id}>{provider.display_name}</option>)}{editingId && !activeProviders.some((item) => item.id === modelDraft.providerId) ? <option value={modelDraft.providerId}>{modelDraft.providerId}</option> : null}</select></label>
+      <SearchableSelect label="Catalog provider" items={catalogProviderItems} value={modelDraft.providerId} onChange={(id) => { setModelField("providerId", id); }} placeholder="Select provider…" isRequired isDisabled={Boolean(editingId)} {...(editingId ? { disabledMessage: "Provider identity is locked for existing models." } : {})} emptySearchResultsText="No providers match" hasClear={!editingId} />
       <TextInput label="Upstream model ID" value={modelDraft.upstreamId} onChange={(value) => { if (!editingId) setModelField("upstreamId", value); }} isRequired isOptional={false} {...(editingId ? { description: "Identity field is locked for existing models." } : {})} />
       <TextInput label="Helmora model ID" value={modelDraft.id} onChange={(value) => { if (!editingId) setModelField("id", value); }} placeholder="provider:model" isOptional={!editingId} {...(editingId ? { description: "Identity field is locked." } : {})} />
       <TextInput label="Display name" value={modelDraft.displayName} onChange={(value) => { setModelField("displayName", value); }} isOptional />
@@ -278,8 +294,8 @@ export function ModelsRoutesPage() {
     {showForm && view === "routes" ? <section className="panel create-panel"><header><p className="eyebrow">Route profile</p><h3>Create or update a route</h3></header><form className="form-grid" onSubmit={submitRoute}>
       <TextInput label="Route ID" value={routeDraft.id} onChange={(value) => { setRouteField("id", value); }} isRequired />
       <label className="native-field"><span>Strategy</span><select value={routeDraft.strategy} onChange={(event) => { setRouteField("strategy", event.target.value); }}><option value="balanced">Balanced</option><option value="quality">Quality</option><option value="fast">Fast</option><option value="economy">Economy</option><option value="reliable">Reliable</option><option value="local">Local</option></select></label>
-      <label className="native-field"><span>Model</span><select value={routeDraft.modelId} onChange={(event) => { const selected = enabledModels.find((item) => item.id === event.target.value); const connection = providers.data?.connections.find((item) => item.provider_id === selected?.providerId); setRouteDraft((current) => ({ ...current, modelId: event.target.value, connectionId: connection?.id ?? "" })); }} required><option value="">Select model…</option>{enabledModels.map((item) => <option value={item.id} key={item.id}>{item.displayName}</option>)}</select></label>
-      <label className="native-field"><span>Connection</span><select value={routeDraft.connectionId} onChange={(event) => { setRouteField("connectionId", event.target.value); }} required><option value="">Select connection…</option>{connectionOptions(routeDraft.modelId, enabledModels, providers.data?.connections ?? []).map((item) => <option value={item.id} key={item.id}>{item.name}</option>)}</select></label>
+      <SearchableSelect label="Model" items={routeModelItems} value={routeDraft.modelId} onChange={(id) => { const selected = enabledModels.find((item) => item.id === id); const connection = providers.data?.connections.find((item) => item.provider_id === selected?.providerId); setRouteDraft((current) => ({ ...current, modelId: id, connectionId: connection?.id ?? "" })); }} placeholder="Select model…" isRequired emptySearchResultsText="No models match" />
+      <SearchableSelect label="Connection" items={routeConnectionItems} value={routeDraft.connectionId} onChange={(id) => { setRouteField("connectionId", id); }} placeholder="Select connection…" isRequired emptySearchResultsText="No connections match" />
       <TextInput label="Priority" value={routeDraft.priority} onChange={(value) => { setRouteField("priority", value.replace(/\D/gu, "")); }} isRequired />
       <div className="form-grid__action"><Button type="submit" label="Save route" variant="primary" isLoading={createRoute.isPending} isDisabled={!routeDraft.id || !routeDraft.modelId || !routeDraft.connectionId} /></div>
     </form></section> : null}
@@ -319,7 +335,7 @@ function RoutesTable({ data, pending, simulateId, setSimulateId, simulation, onS
   return <section className="panel data-panel"><header className="panel__header"><div><p className="eyebrow">Current state</p><h3>Routing profiles</h3></div></header>{pending ? <p className="muted-copy">Loading routes…</p> : data.length ? <div className="route-list">{data.map((route) => <article className="route-card" key={route.id}><header><div><h4>{route.name || route.id}</h4><p>{route.id} · revision {route.revision}</p></div><Badge variant={route.enabled ? "success" : "neutral"} label={route.strategy} /></header><ol>{route.targets.map((target) => <li key={`${target.modelId}:${target.connectionId}`}><span>{target.priority}</span><div><strong>{target.modelId}</strong><small>{target.connectionId}</small></div></li>)}</ol><footer><Button label="Simulate" size="sm" variant="secondary" onClick={() => { setSimulateId(route.id); onSimulate(route.id); }} /><Button label="Delete" size="sm" variant="destructive" onClick={() => { onDelete(route.id); }} /></footer>{simulateId === route.id && simulation ? <pre className="json-preview">{JSON.stringify(simulation, null, 2)}</pre> : null}</article>)}</div> : <p className="muted-copy">No route profiles.</p>}</section>;
 }
 
-function connectionOptions(modelId: string, models: ModelDefinition[], connections: ProviderConnection[]): ProviderConnection[] {
+export function connectionOptions(modelId: string, models: ModelDefinition[], connections: ProviderConnection[]): ProviderConnection[] {
   const providerId = models.find((item) => item.id === modelId)?.providerId;
   return providerId ? connections.filter((connection) => connection.provider_id === providerId) : connections;
 }

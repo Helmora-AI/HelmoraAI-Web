@@ -43,6 +43,11 @@ const queryClient = new QueryClient({
   },
 });
 
+/** Test-only: drop cached queries between Vitest cases that share the module singleton. */
+export function resetAppQueryClient(): void {
+  queryClient.clear();
+}
+
 export function AppProviders({ children }: { children: ReactNode }) {
   const [preference, updatePreference] = useState<ThemePreference>(readThemePreference);
   const value = useMemo<ThemePreferenceValue>(() => ({
