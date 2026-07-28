@@ -144,9 +144,10 @@ test("provider, model, route and one-time API-key administration work through th
   await page.getByRole("tab", { name: "Route profiles 0" }).click();
   await page.getByRole("button", { name: "Add route" }).click();
   await page.getByLabel("Route ID").fill("browser-route");
+  await page.getByLabel("Display name").fill("Browser Route");
   await selectTypeahead(page, "Model", "Browser model", /Browser model|browser:model/i);
   await page.getByRole("button", { name: "Save route" }).click();
-  await expect(page.getByText("browser-route", { exact: true })).toBeVisible();
+  await expect(page.getByText("Browser Route", { exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Simulate" }).click();
   await expect(page.locator(".json-preview")).toContainText("browser:model");
   await page.goto(`${app.baseURL}/api-keys`);

@@ -32,10 +32,24 @@ import { connectionSearchItem, modelSearchItem, providerSearchItem } from "../li
 export type { ModelDraft };
 export { buildModelUpsertBody } from "../lib/modelUpsert";
 
-interface RouteDraft { id: string; strategy: string; modelId: string; connectionId: string; priority: string; }
+interface RouteDraft { id: string; name: string; strategy: string; modelId: string; connectionId: string; priority: string; }
 
 const MODEL_EMPTY: ModelDraft = { id: "", providerId: "", upstreamId: "", displayName: "", family: "", contextWindow: "128000", maxOutputTokens: "8192", tools: true, reasoning: false, embeddings: false };
-const ROUTE_EMPTY: RouteDraft = { id: "helmora-auto", strategy: "balanced", modelId: "", connectionId: "", priority: "10" };
+const ROUTE_EMPTY: RouteDraft = { id: "helmora-auto", name: "Helmora Auto", strategy: "balanced", modelId: "", connectionId: "", priority: "10" };
+
+export function buildRouteUpsertBody(input: RouteDraft): {
+  id: string;
+  name: string;
+  strategy: string;
+  targets: Array<{ modelId: string; connectionId: string; priority: number }>;
+} {
+  return {
+    id: input.id,
+    name: input.name,
+    strategy: input.strategy,
+    targets: [{ modelId: input.modelId, connectionId: input.connectionId, priority: Number(input.priority) }],
+  };
+}
 
 export function modelRegistrationProviders(providers: ProvidersResponse["providers"] | undefined) {
   return (providers ?? []).filter((provider) => provider.availability === "active" && provider.enabled !== false);
@@ -161,7 +175,7 @@ export function ModelsRoutesPage() {
       ]);
     },
   });
-  const createRoute = useMutation({ mutationFn: (input: RouteDraft) => api.request<{ id: string }>("/api/v2/routes", { method: "POST", body: { id: input.id, strategy: input.strategy, targets: [{ modelId: input.modelId, connectionId: input.connectionId, priority: Number(input.priority) }] } }), onSuccess: async () => { setRouteDraft(ROUTE_EMPTY); setShowForm(false); await queryClient.invalidateQueries({ queryKey: ["routes"] }); } });
+  const createRoute = useMutation({ mutationFn: (input: RouteDraft) => api.request<{ id: string }>("/api/v2/routes", { method: "POST", body: buildRouteUpsertBody(input) }), onSuccess: async () => { setRouteDraft(ROUTE_EMPTY); setShowForm(false); await queryClient.invalidateQueries({ queryKey: ["routes"] }); } });
   const deleteRoute = useMutation({ mutationFn: (id: string) => api.request<{ deleted: boolean }>(`/api/v2/routes/${encodeURIComponent(id)}`, { method: "DELETE" }), onSuccess: () => queryClient.invalidateQueries({ queryKey: ["routes"] }) });
   const simulate = useMutation({ mutationFn: (id: string) => api.request<Record<string, unknown>>("/api/v2/routes/simulate", { method: "POST", body: { model: id, input: "Route simulation from Helmora Web" } }), onSuccess: setSimulation });
 
@@ -296,11 +310,12 @@ export function ModelsRoutesPage() {
 
     {showForm && view === "routes" ? <section className="panel create-panel"><header><p className="eyebrow">Route profile</p><h3>Create or update a route</h3></header><form className="form-grid" onSubmit={submitRoute}>
       <TextInput label="Route ID" value={routeDraft.id} onChange={(value) => { setRouteField("id", value); }} isRequired />
+      <TextInput label="Display name" value={routeDraft.name} onChange={(value) => { setRouteField("name", value); }} isRequired />
       <label className="native-field"><span>Strategy</span><select value={routeDraft.strategy} onChange={(event) => { setRouteField("strategy", event.target.value); }}><option value="balanced">Balanced</option><option value="quality">Quality</option><option value="fast">Fast</option><option value="economy">Economy</option><option value="reliable">Reliable</option><option value="local">Local</option></select></label>
       <SearchableSelect label="Model" items={routeModelItems} value={routeDraft.modelId} onChange={(id) => { const selected = enabledModels.find((item) => item.id === id); const connection = providers.data?.connections.find((item) => item.provider_id === selected?.providerId); setRouteDraft((current) => ({ ...current, modelId: id, connectionId: connection?.id ?? "" })); }} placeholder="Select model…" isRequired emptySearchResultsText="No models match" />
       <SearchableSelect label="Connection" items={routeConnectionItems} value={routeDraft.connectionId} onChange={(id) => { setRouteField("connectionId", id); }} placeholder="Select connection…" isRequired emptySearchResultsText="No connections match" />
       <TextInput label="Priority" value={routeDraft.priority} onChange={(value) => { setRouteField("priority", value.replace(/\D/gu, "")); }} isRequired />
-      <div className="form-grid__action"><Button type="submit" label="Save route" variant="primary" isLoading={createRoute.isPending} isDisabled={!routeDraft.id || !routeDraft.modelId || !routeDraft.connectionId} /></div>
+      <div className="form-grid__action"><Button type="submit" label="Save route" variant="primary" isLoading={createRoute.isPending} isDisabled={!routeDraft.id || !routeDraft.name || !routeDraft.modelId || !routeDraft.connectionId} /></div>
     </form></section> : null}
 
     {error ? <RequestError error={error} /> : null}

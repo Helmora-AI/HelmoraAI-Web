@@ -83,7 +83,7 @@ export interface ModelSummary {
   id: string;
   object?: string;
   owned_by?: string;
-  displayName?: string;
+  displayName: string;
   providerId?: string;
   [key: string]: unknown;
 }

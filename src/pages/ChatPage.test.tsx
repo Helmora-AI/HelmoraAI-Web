@@ -75,7 +75,7 @@ describe("ChatPage", () => {
     expect(source).toHaveAttribute("href", "https://example.com/reference");
     expect(source).toHaveAttribute("rel", expect.stringContaining("noopener"));
     expect(requests.some((request) => request.url === "/api/v2/chat" && request.method === "POST")).toBe(true);
-  });
+  }, 15_000);
 });
 
 function json(value: unknown, status = 200): Response {

@@ -6,7 +6,7 @@ import {
   isEnvironmentManagedRevision,
   selectableNewModels,
 } from "../lib/modelDiscovery";
-import { connectionOptions, deleteModelConfirmMessage, draftFromModel } from "./ModelsRoutesPage";
+import { buildRouteUpsertBody, connectionOptions, deleteModelConfirmMessage, draftFromModel } from "./ModelsRoutesPage";
 import { buildModelUpsertBody } from "../lib/modelUpsert";
 import type { ModelDefinition } from "../lib/api/types";
 
@@ -187,5 +187,21 @@ describe("model edit and delete helpers", () => {
   it("warns when hard-deleting environment-managed models", () => {
     expect(deleteModelConfirmMessage({ id: "ollama:x", catalogRevision: "env-bootstrap" })).toMatch(/reappear after Hub restart/i);
     expect(deleteModelConfirmMessage({ id: "web:y", catalogRevision: "web-v2" })).not.toMatch(/reappear after Hub restart/i);
+  });
+
+  it("includes route display name in the route upsert payload", () => {
+    expect(buildRouteUpsertBody({
+      id: "helmora-mini-1.0",
+      name: "Helmora Mini 1.0",
+      strategy: "balanced",
+      modelId: "groq:mixtral",
+      connectionId: "conn_groq",
+      priority: "10",
+    })).toEqual({
+      id: "helmora-mini-1.0",
+      name: "Helmora Mini 1.0",
+      strategy: "balanced",
+      targets: [{ modelId: "groq:mixtral", connectionId: "conn_groq", priority: 10 }],
+    });
   });
 });

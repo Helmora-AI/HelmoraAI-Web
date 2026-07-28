@@ -61,7 +61,8 @@ Highlights:
   (availability, connection state, verification, protocol, source, tier).
 - Models & routes includes Diagnose quick-add, searchable provider/model/
   connection selectors, catalog search/filter, metadata editing with locked
-  identity fields, Enable/Disable, hard Delete and route simulation.
+  identity fields, Enable/Disable, hard Delete and route simulation. Route
+  creation keeps a stable Route ID plus a required operator-facing Display name.
 - Chat routed-model control is a searchable Typeahead; the top bar shows Hub
   `/health` round-trip latency every five seconds.
 - Provider forms are driven by Hub `config_fields`; multi-connection state is

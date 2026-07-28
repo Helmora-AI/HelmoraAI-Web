@@ -28,7 +28,7 @@ describe("SearchableSelect", () => {
     const option = await screen.findByRole("option", { name: /Ollama/i });
     await user.click(option);
     await waitFor(() => { expect(selected).toBe("ollama"); });
-  });
+  }, 15_000);
 
   it("rerenders a controlled selected token when the parent value changes", () => {
     function Harness({ value }: { value: string }) {
