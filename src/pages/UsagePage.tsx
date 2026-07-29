@@ -19,6 +19,12 @@ import {
 import type { UsageMetric } from "../components/UsageChart";
 
 const UsageChart = lazy(() => import("../components/UsageChart"));
+const USAGE_CHARTS: Array<{ metric: UsageMetric; eyebrow: string; title: string; description: string }> = [
+  { metric: "requests", eyebrow: "Reliability", title: "Request outcomes", description: "Successful, failed, cancelled, and partial requests." },
+  { metric: "tokens", eyebrow: "Demand", title: "Token volume", description: "Input and output token consumption over time." },
+  { metric: "cost", eyebrow: "Economics", title: "Estimated cost", description: "Known catalog cost with unknown-pricing coverage." },
+  { metric: "latency", eyebrow: "Performance", title: "Average latency", description: "End-to-end response time for logical requests." },
+];
 
 export function UsagePage() {
   const [days, setDays] = useState("30");
@@ -127,9 +133,9 @@ export function UsagePage() {
         <Metric label="Estimated cost" value={formatSummaryCost(summary)} note={formatSummaryCostNote(summary)} tone="violet" />
         <Metric label="Average latency" value={`${Math.round(summary?.average_latency_ms ?? 0)} ms`} note={`${formatNumber(summary?.physical_attempts)} physical attempts`} tone="coral" />
       </section>
-      <section className="panel usage-visual">
+      <section className="usage-observatory">
         <header className="panel__header">
-          <div><p className="eyebrow">Trend</p><h3>Daily {metricLabel(metric)}</h3></div>
+          <div><p className="eyebrow">Telemetry board</p><h3>Four views of the same workload</h3><p className="usage-ledger__note">Charts cover the full selected period using daily UTC buckets. Select a focus to expand it.</p></div>
           <label className="native-field usage-metric-select">
             <span>Metric</span>
             <select value={metric} onChange={(event) => { setMetric(event.target.value as UsageMetric); }}>
@@ -140,9 +146,19 @@ export function UsagePage() {
             </select>
           </label>
         </header>
-        <Suspense fallback={<div className="chart-empty">Loading chart…</div>}>
-          <UsageChart buckets={usage.data?.buckets ?? []} metric={metric} />
-        </Suspense>
+        <div className="usage-chart-grid">
+          {USAGE_CHARTS.map((chart) => (
+            <article key={chart.metric} className={chart.metric === metric ? `usage-chart-card usage-chart-card--${chart.metric} usage-chart-card--active` : `usage-chart-card usage-chart-card--${chart.metric}`}>
+              <header>
+                <div><p className="eyebrow">{chart.eyebrow}</p><h4>{chart.title}</h4><p>{chart.description}</p></div>
+                <button type="button" aria-pressed={chart.metric === metric} onClick={() => { setMetric(chart.metric); }}>{chart.metric === metric ? "Focused" : "Expand"}</button>
+              </header>
+              <Suspense fallback={<div className="chart-empty">Loading chart…</div>}>
+                <UsageChart buckets={usage.data?.buckets ?? []} metric={chart.metric} height={chart.metric === metric ? 280 : 205} />
+              </Suspense>
+            </article>
+          ))}
+        </div>
       </section>
       <section className="panel data-panel usage-ledger">
         <header className="panel__header">
@@ -380,15 +396,6 @@ function formatSummaryCostNote(summary?: UsageResponse["summary"]): string {
   if (parts.length > 0) return parts.join(" · ");
   if (complete > 0) return "Complete catalog estimate";
   return "Catalog estimate";
-}
-
-function metricLabel(metric: UsageMetric): string {
-  switch (metric) {
-    case "requests": return "requests";
-    case "tokens": return "tokens";
-    case "cost": return "estimated cost";
-    case "latency": return "latency";
-  }
 }
 
 function statusVariant(status: string): "success" | "error" | "neutral" | "info" {

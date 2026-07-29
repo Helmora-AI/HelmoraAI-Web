@@ -8,6 +8,8 @@ export interface ModelDraft {
   family: string;
   contextWindow: string;
   maxOutputTokens: string;
+  inputPricePerMillion?: string;
+  outputPricePerMillion?: string;
   tools: boolean;
   reasoning: boolean;
   embeddings: boolean;
@@ -48,7 +50,7 @@ export function buildModelUpsertBody(draft: ModelDraft, original?: ModelDefiniti
         streaming: original.capabilities.streaming,
         embeddings: draft.embeddings,
       },
-      pricing: { ...original.pricing },
+      pricing: pricingFromDraft(draft, original.pricing),
     };
   }
 
@@ -69,7 +71,17 @@ export function buildModelUpsertBody(draft: ModelDraft, original?: ModelDefiniti
       streaming: CREATE_CAPABILITY_DEFAULTS.streaming,
       embeddings: draft.embeddings,
     },
-    pricing: { ...CREATE_CAPABILITY_DEFAULTS.pricing },
+    pricing: pricingFromDraft(draft, CREATE_CAPABILITY_DEFAULTS.pricing),
     catalogRevision: CREATE_CAPABILITY_DEFAULTS.catalogRevision,
   };
+}
+
+function pricingFromDraft(draft: ModelDraft, fallback: ModelDefinition["pricing"]): ModelDefinition["pricing"] {
+  if (draft.inputPricePerMillion === undefined && draft.outputPricePerMillion === undefined) return { ...fallback };
+  const pricing: ModelDefinition["pricing"] = {};
+  const input = draft.inputPricePerMillion?.trim();
+  const output = draft.outputPricePerMillion?.trim();
+  if (input !== undefined && input !== "" && Number.isFinite(Number(input)) && Number(input) >= 0) pricing.inputPerMillionUsd = Number(input);
+  if (output !== undefined && output !== "" && Number.isFinite(Number(output)) && Number(output) >= 0) pricing.outputPerMillionUsd = Number(output);
+  return pricing;
 }

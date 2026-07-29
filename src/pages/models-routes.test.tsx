@@ -204,4 +204,44 @@ describe("model edit and delete helpers", () => {
       targets: [{ modelId: "groq:mixtral", connectionId: "conn_groq", priority: 10 }],
     });
   });
+
+  it("serializes one primary model followed by ordered fallbacks", () => {
+    expect(buildRouteUpsertBody({
+      id: "helmora-auto",
+      name: "Helmora Auto",
+      strategy: "balanced",
+      primary: { key: "primary", modelId: "openai:gpt", connectionId: "conn_openai" },
+      fallbacks: [
+        { key: "fallback-1", modelId: "anthropic:sonnet", connectionId: "conn_anthropic" },
+        { key: "fallback-2", modelId: "ollama:qwen", connectionId: "conn_ollama" },
+      ],
+    })).toEqual({
+      id: "helmora-auto",
+      name: "Helmora Auto",
+      strategy: "balanced",
+      targets: [
+        { modelId: "openai:gpt", connectionId: "conn_openai", priority: 1 },
+        { modelId: "anthropic:sonnet", connectionId: "conn_anthropic", priority: 2 },
+        { modelId: "ollama:qwen", connectionId: "conn_ollama", priority: 3 },
+      ],
+    });
+  });
+
+  it("writes explicit catalog pricing so request cost can be accounted", () => {
+    const body = buildModelUpsertBody({
+      id: "groq:priced",
+      providerId: "groq",
+      upstreamId: "priced",
+      displayName: "Priced",
+      family: "priced",
+      contextWindow: "8192",
+      maxOutputTokens: "2048",
+      inputPricePerMillion: "0.05",
+      outputPricePerMillion: "0.08",
+      tools: true,
+      reasoning: false,
+      embeddings: false,
+    });
+    expect(body.pricing).toEqual({ inputPerMillionUsd: 0.05, outputPerMillionUsd: 0.08 });
+  });
 });

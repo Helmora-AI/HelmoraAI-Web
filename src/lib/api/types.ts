@@ -85,6 +85,9 @@ export interface ModelSummary {
   owned_by?: string;
   displayName: string;
   providerId?: string;
+  capabilities?: string[];
+  virtual?: boolean;
+  direct?: boolean;
   [key: string]: unknown;
 }
 
@@ -144,6 +147,21 @@ export interface ResponsesCompletedEvent {
   };
 }
 
+export interface UsageAccountingReceipt {
+  request_ids: string[];
+  requests: number;
+  physical_attempts: number;
+  input_tokens: number;
+  output_tokens: number;
+  total_tokens: number;
+  cost_usd: number;
+  cost_known: boolean;
+  cost_coverage: "complete" | "partial" | "unknown";
+  cost_source: string;
+  usage_source: string;
+  latency_ms: number;
+}
+
 export interface NativeChatResponse {
   id: string;
   model: string;
@@ -153,6 +171,8 @@ export interface NativeChatResponse {
     conversation_id: string;
     context: Record<string, unknown>;
     rounds: number;
+    request_ids?: string[];
+    accounting?: UsageAccountingReceipt;
     tool_runs: Array<Record<string, unknown>>;
     citations: Array<{ id: string; url: string; title: string; snippet?: string; toolName: string; toolRunId: string }>;
   };
@@ -375,6 +395,6 @@ export interface UsageResponse {
   requests: UsageRequest[];
 }
 export interface AuditEvent { id: string; actor_type: string; actor_id: string | null; action: string; target_type: string; target_id: string | null; request_id: string | null; outcome: string; metadata: Record<string, unknown>; created_at: string; }
-export interface ToolDefinition { name: string; description?: string; inputSchema?: Record<string, unknown>; input_schema?: Record<string, unknown>; risk: string; timeoutMs: number; [key: string]: unknown; }
+export interface ToolDefinition { name: string; version?: string; description?: string; inputSchema?: Record<string, unknown>; input_schema?: Record<string, unknown>; risk: string; timeoutMs: number; maxOutputBytes?: number; persisted?: boolean; registrySource?: "builtin" | "web_manifest" | string; [key: string]: unknown; }
 export interface WebhookRecord { id: string; url: string; events: string[]; enabled: boolean; createdAt: string; updatedAt: string; }
 export interface WebhookReceipt { webhook: WebhookRecord; secret: string; }

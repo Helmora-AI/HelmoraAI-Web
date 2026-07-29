@@ -118,7 +118,11 @@ export function AppShell() {
             <ThemeControl preference={preference} setPreference={setPreference} />
           </div>
         </header>
-        <main className="workspace"><Outlet /></main>
+        <main className="workspace">
+          <div key={location.pathname} className="workspace__route">
+            <Outlet />
+          </div>
+        </main>
       </div>
     </div>
   );

@@ -32,23 +32,32 @@ import { connectionSearchItem, modelSearchItem, providerSearchItem } from "../li
 export type { ModelDraft };
 export { buildModelUpsertBody } from "../lib/modelUpsert";
 
-interface RouteDraft { id: string; name: string; strategy: string; modelId: string; connectionId: string; priority: string; }
+export interface RouteTargetDraft { key: string; modelId: string; connectionId: string; }
+export interface RouteDraft { id: string; name: string; strategy: string; primary: RouteTargetDraft; fallbacks: RouteTargetDraft[]; }
+interface LegacyRouteDraft { id: string; name: string; strategy: string; modelId: string; connectionId: string; priority: string; }
 
-const MODEL_EMPTY: ModelDraft = { id: "", providerId: "", upstreamId: "", displayName: "", family: "", contextWindow: "128000", maxOutputTokens: "8192", tools: true, reasoning: false, embeddings: false };
-const ROUTE_EMPTY: RouteDraft = { id: "helmora-auto", name: "Helmora Auto", strategy: "balanced", modelId: "", connectionId: "", priority: "10" };
+const MODEL_EMPTY: ModelDraft = { id: "", providerId: "", upstreamId: "", displayName: "", family: "", contextWindow: "128000", maxOutputTokens: "8192", inputPricePerMillion: "", outputPricePerMillion: "", tools: true, reasoning: false, embeddings: false };
+const ROUTE_EMPTY: RouteDraft = { id: "helmora-auto", name: "Helmora Auto", strategy: "balanced", primary: { key: "primary", modelId: "", connectionId: "" }, fallbacks: [] };
 
-export function buildRouteUpsertBody(input: RouteDraft): {
+export function buildRouteUpsertBody(input: RouteDraft | LegacyRouteDraft): {
   id: string;
   name: string;
   strategy: string;
   targets: Array<{ modelId: string; connectionId: string; priority: number }>;
 } {
-  return {
-    id: input.id,
-    name: input.name,
-    strategy: input.strategy,
-    targets: [{ modelId: input.modelId, connectionId: input.connectionId, priority: Number(input.priority) }],
-  };
+  if ("primary" in input) {
+    return {
+      id: input.id,
+      name: input.name,
+      strategy: input.strategy,
+      targets: [input.primary, ...input.fallbacks].map((target, index) => ({
+        modelId: target.modelId,
+        connectionId: target.connectionId,
+        priority: index + 1,
+      })),
+    };
+  }
+  return { id: input.id, name: input.name, strategy: input.strategy, targets: [{ modelId: input.modelId, connectionId: input.connectionId, priority: Number(input.priority) }] };
 }
 
 export function modelRegistrationProviders(providers: ProvidersResponse["providers"] | undefined) {
@@ -64,6 +73,8 @@ export function draftFromModel(model: ModelDefinition): ModelDraft {
     family: model.family,
     contextWindow: String(model.contextWindow),
     maxOutputTokens: String(model.maxOutputTokens),
+    inputPricePerMillion: model.pricing.inputPerMillionUsd === undefined ? "" : String(model.pricing.inputPerMillionUsd),
+    outputPricePerMillion: model.pricing.outputPerMillionUsd === undefined ? "" : String(model.pricing.outputPerMillionUsd),
     tools: model.capabilities.tools,
     reasoning: model.capabilities.reasoning,
     embeddings: model.capabilities.embeddings,
@@ -121,10 +132,6 @@ export function ModelsRoutesPage() {
     return items;
   }, [activeProviders, editingId, modelDraft.providerId]);
   const routeModelItems = useMemo(() => enabledModels.map(modelSearchItem), [enabledModels]);
-  const routeConnectionItems = useMemo(
-    () => connectionOptions(routeDraft.modelId, enabledModels, providers.data?.connections ?? []).map(connectionSearchItem),
-    [routeDraft.modelId, enabledModels, providers.data?.connections],
-  );
 
   useEffect(() => {
     if (!modelDraft.providerId || editingId) return;
@@ -200,7 +207,9 @@ export function ModelsRoutesPage() {
   });
 
   const error = createOrUpdateModel.error ?? disableModel.error ?? enableModel.error ?? deleteModel.error ?? createRoute.error ?? deleteRoute.error ?? simulate.error ?? diagnoseMutation.error ?? importMutation.error;
-  const modelSubmitDisabled = !modelDraft.providerId || !modelDraft.upstreamId || Number(modelDraft.contextWindow) < 1 || Number(modelDraft.maxOutputTokens) < 1 || (!editingId && !activeProviders.some((provider) => provider.id === modelDraft.providerId));
+  const modelSubmitDisabled = !modelDraft.providerId || !modelDraft.upstreamId || Number(modelDraft.contextWindow) < 1 || Number(modelDraft.maxOutputTokens) < 1
+    || !validOptionalPrice(modelDraft.inputPricePerMillion) || !validOptionalPrice(modelDraft.outputPricePerMillion)
+    || (!editingId && !activeProviders.some((provider) => provider.id === modelDraft.providerId));
   const filteredCatalog = useMemo(() => filterCatalogModels(models.data?.data ?? [], catalogQuery), [models.data?.data, catalogQuery]);
   const activeDiagnose = diagnose && diagnose.connectionId === discoverConnectionId ? diagnose : undefined;
   const activeImport = importResult && importResult.connectionId === discoverConnectionId ? importResult : undefined;
@@ -218,11 +227,51 @@ export function ModelsRoutesPage() {
   const createdCount = activeImport?.results.filter((item) => item.status === "created").length ?? 0;
   const skippedCount = activeImport?.results.filter((item) => item.status === "skipped_existing").length ?? 0;
   const discoverBusy = diagnoseMutation.isPending || importMutation.isPending;
+  const routeTargets = [routeDraft.primary, ...routeDraft.fallbacks];
+  const routeTargetKeys = new Set(routeTargets.filter((target) => target.modelId && target.connectionId).map((target) => `${target.modelId}:${target.connectionId}`));
+  const routeSubmitDisabled = !routeDraft.id || !routeDraft.name
+    || routeTargets.some((target) => !target.modelId || !target.connectionId)
+    || routeTargetKeys.size !== routeTargets.length;
 
   function submitModel(event: FormEvent<HTMLFormElement>) { event.preventDefault(); createOrUpdateModel.mutate(modelDraft); }
   function submitRoute(event: FormEvent<HTMLFormElement>) { event.preventDefault(); createRoute.mutate(routeDraft); }
   function setModelField<K extends keyof ModelDraft>(key: K, value: ModelDraft[K]) { setModelDraft((current) => ({ ...current, [key]: value })); }
-  function setRouteField(key: keyof RouteDraft, value: string) { setRouteDraft((current) => ({ ...current, [key]: value })); }
+  function setRouteField(key: "id" | "name" | "strategy", value: string) { setRouteDraft((current) => ({ ...current, [key]: value })); }
+  function setRouteTarget(kind: "primary" | "fallback", index: number, modelId: string, connectionId?: string) {
+    setRouteDraft((current) => {
+      const target = kind === "primary" ? current.primary : current.fallbacks[index];
+      if (!target) return current;
+      const next = { ...target, modelId, ...(connectionId === undefined ? {} : { connectionId }) };
+      return kind === "primary"
+        ? { ...current, primary: next }
+        : { ...current, fallbacks: current.fallbacks.map((item, itemIndex) => itemIndex === index ? next : item) };
+    });
+  }
+  function selectRouteModel(kind: "primary" | "fallback", index: number, id: string) {
+    const selected = enabledModels.find((item) => item.id === id);
+    const connection = providers.data?.connections.find((item) => item.provider_id === selected?.providerId && item.enabled !== false)
+      ?? providers.data?.connections.find((item) => item.provider_id === selected?.providerId);
+    setRouteTarget(kind, index, id, connection?.id ?? "");
+  }
+  function addFallback() {
+    setRouteDraft((current) => ({
+      ...current,
+      fallbacks: [...current.fallbacks, { key: `fallback-${Date.now()}-${current.fallbacks.length}`, modelId: "", connectionId: "" }],
+    }));
+  }
+  function startEditRoute(route: RouteProfile) {
+    const targets = [...route.targets].filter((target) => target.enabled).sort((left, right) => left.priority - right.priority);
+    const [primary, ...fallbacks] = targets;
+    setRouteDraft({
+      id: route.id,
+      name: route.name,
+      strategy: route.strategy,
+      primary: { key: "primary", modelId: primary?.modelId ?? "", connectionId: primary?.connectionId ?? "" },
+      fallbacks: fallbacks.map((target, index) => ({ key: `fallback-${index}-${target.modelId}`, modelId: target.modelId, connectionId: target.connectionId })),
+    });
+    setView("routes");
+    setShowForm(true);
+  }
   function startEdit(model: ModelDefinition) {
     setEditingId(model.id);
     setEditingOriginal(model);
@@ -249,7 +298,7 @@ export function ModelsRoutesPage() {
   }
 
   return <div className="page">
-    <section className="page-intro"><div><p className="eyebrow">Traffic policy</p><h2>Models describe capability. Routes decide reality.</h2><p>Register or discover models, review disabled imports, then attach enabled models to route profiles. Diagnose lists upstream IDs only — it does not Verify or Enable.</p></div><Button label={showForm ? "Close form" : view === "models" ? (editingId ? "Cancel edit" : "Add model") : "Add route"} variant={showForm ? "secondary" : "primary"} onClick={() => { if (view === "models") startCreate(); else { setShowForm((value) => !value); setEditingId(undefined); setEditingOriginal(undefined); } }} /></section>
+    <section className="page-intro"><div><p className="eyebrow">Traffic policy</p><h2>Models describe capability. Routes decide reality.</h2><p>Register or discover models, then build each Helmora route from one primary model and an ordered fallback chain.</p></div><Button label={showForm ? "Close form" : view === "models" ? (editingId ? "Cancel edit" : "Add model") : "Add route"} variant={showForm ? "secondary" : "primary"} onClick={() => { if (view === "models") startCreate(); else { if (!showForm) setRouteDraft(ROUTE_EMPTY); setShowForm((value) => !value); setEditingId(undefined); setEditingOriginal(undefined); } }} /></section>
     <div className="segmented" role="tablist"><button role="tab" aria-selected={view === "models"} onClick={() => { setView("models"); setShowForm(false); setEditingId(undefined); setEditingOriginal(undefined); }}>Model catalog <span>{models.data?.data.length ?? 0}</span></button><button role="tab" aria-selected={view === "routes"} onClick={() => { setView("routes"); setShowForm(false); setEditingId(undefined); setEditingOriginal(undefined); }}>Route profiles <span>{routes.data?.data.length ?? 0}</span></button></div>
 
     {view === "models" ? <section className="panel create-panel discover-panel">
@@ -303,19 +352,45 @@ export function ModelsRoutesPage() {
       <TextInput label="Family" value={modelDraft.family} onChange={(value) => { setModelField("family", value); }} isOptional />
       <TextInput label="Context window" value={modelDraft.contextWindow} onChange={(value) => { setModelField("contextWindow", value.replace(/\D/gu, "")); }} isRequired />
       <TextInput label="Max output tokens" value={modelDraft.maxOutputTokens} onChange={(value) => { setModelField("maxOutputTokens", value.replace(/\D/gu, "")); }} isRequired />
+      <TextInput label="Input price / 1M tokens (USD)" value={modelDraft.inputPricePerMillion ?? ""} onChange={(value) => { setModelField("inputPricePerMillion", value.replace(/[^\d.]/gu, "")); }} placeholder="Leave blank if unknown" isOptional />
+      <TextInput label="Output price / 1M tokens (USD)" value={modelDraft.outputPricePerMillion ?? ""} onChange={(value) => { setModelField("outputPricePerMillion", value.replace(/[^\d.]/gu, "")); }} placeholder="Leave blank if unknown" isOptional />
       <div className="check-row"><label><input type="checkbox" checked={modelDraft.tools} onChange={(event) => { setModelField("tools", event.target.checked); }} /> Tools</label><label><input type="checkbox" checked={modelDraft.reasoning} onChange={(event) => { setModelField("reasoning", event.target.checked); }} /> Reasoning</label><label><input type="checkbox" checked={modelDraft.embeddings} onChange={(event) => { setModelField("embeddings", event.target.checked); }} /> Embeddings</label></div>
       {editingId && isEnvironmentManagedRevision(modelDraft.catalogRevision) ? <InlineAlert title="Environment-managed revision is preserved on edit. Hard-delete may be reseeded after Hub restart if env vars remain." tone="warning" /> : null}
       <div className="form-grid__action"><Button type="submit" label={editingId ? "Save changes" : "Register model"} variant="primary" isLoading={createOrUpdateModel.isPending} isDisabled={modelSubmitDisabled} /></div>
     </form></section> : null}
 
-    {showForm && view === "routes" ? <section className="panel create-panel"><header><p className="eyebrow">Route profile</p><h3>Create or update a route</h3></header><form className="form-grid" onSubmit={submitRoute}>
-      <TextInput label="Route ID" value={routeDraft.id} onChange={(value) => { setRouteField("id", value); }} isRequired />
-      <TextInput label="Display name" value={routeDraft.name} onChange={(value) => { setRouteField("name", value); }} isRequired />
-      <label className="native-field"><span>Strategy</span><select value={routeDraft.strategy} onChange={(event) => { setRouteField("strategy", event.target.value); }}><option value="balanced">Balanced</option><option value="quality">Quality</option><option value="fast">Fast</option><option value="economy">Economy</option><option value="reliable">Reliable</option><option value="local">Local</option></select></label>
-      <SearchableSelect label="Model" items={routeModelItems} value={routeDraft.modelId} onChange={(id) => { const selected = enabledModels.find((item) => item.id === id); const connection = providers.data?.connections.find((item) => item.provider_id === selected?.providerId); setRouteDraft((current) => ({ ...current, modelId: id, connectionId: connection?.id ?? "" })); }} placeholder="Select model…" isRequired emptySearchResultsText="No models match" />
-      <SearchableSelect label="Connection" items={routeConnectionItems} value={routeDraft.connectionId} onChange={(id) => { setRouteField("connectionId", id); }} placeholder="Select connection…" isRequired emptySearchResultsText="No connections match" />
-      <TextInput label="Priority" value={routeDraft.priority} onChange={(value) => { setRouteField("priority", value.replace(/\D/gu, "")); }} isRequired />
-      <div className="form-grid__action"><Button type="submit" label="Save route" variant="primary" isLoading={createRoute.isPending} isDisabled={!routeDraft.id || !routeDraft.name || !routeDraft.modelId || !routeDraft.connectionId} /></div>
+    {showForm && view === "routes" ? <section className="panel create-panel route-builder"><header><p className="eyebrow">Route profile</p><h3>Choose a primary model and its fallback chain</h3><p className="muted-copy">Helmora tries the primary first. Fallbacks run top to bottom only when an earlier target cannot serve the request.</p></header><form onSubmit={submitRoute}>
+      <div className="form-grid form-grid--three route-builder__identity">
+        <TextInput label="Route ID" value={routeDraft.id} onChange={(value) => { setRouteField("id", value); }} isRequired />
+        <TextInput label="Display name" value={routeDraft.name} onChange={(value) => { setRouteField("name", value); }} isRequired />
+        <label className="native-field"><span>Strategy</span><select value={routeDraft.strategy} onChange={(event) => { setRouteField("strategy", event.target.value); }}><option value="balanced">Balanced</option><option value="quality">Quality</option><option value="fast">Fast</option><option value="economy">Economy</option><option value="reliable">Reliable</option><option value="local">Local</option></select></label>
+      </div>
+      <div className="route-builder__stack">
+        <RouteTargetEditor
+          label="Primary model"
+          detail="Always attempted first"
+          target={routeDraft.primary}
+          modelItems={routeModelItems}
+          models={enabledModels}
+          connections={providers.data?.connections ?? []}
+          onModelChange={(id) => { selectRouteModel("primary", 0, id); }}
+          onConnectionChange={(id) => { setRouteTarget("primary", 0, routeDraft.primary.modelId, id); }}
+        />
+        {routeDraft.fallbacks.map((target, index) => <RouteTargetEditor
+          key={target.key}
+          label={`Fallback ${index + 1}`}
+          detail={`Attempt ${index + 2}`}
+          target={target}
+          modelItems={routeModelItems}
+          models={enabledModels}
+          connections={providers.data?.connections ?? []}
+          onModelChange={(id) => { selectRouteModel("fallback", index, id); }}
+          onConnectionChange={(id) => { setRouteTarget("fallback", index, target.modelId, id); }}
+          onRemove={() => { setRouteDraft((current) => ({ ...current, fallbacks: current.fallbacks.filter((_, itemIndex) => itemIndex !== index) })); }}
+        />)}
+      </div>
+      {routeTargetKeys.size !== routeTargets.length && routeTargets.every((target) => target.modelId && target.connectionId) ? <InlineAlert title="Each route target must use a unique model and connection pair." tone="warning" /> : null}
+      <div className="route-builder__actions"><Button label="Add fallback" variant="secondary" size="sm" isDisabled={routeDraft.fallbacks.length >= 11} onClick={addFallback} /><Button type="submit" label="Save route chain" variant="primary" isLoading={createRoute.isPending} isDisabled={routeSubmitDisabled} /></div>
     </form></section> : null}
 
     {error ? <RequestError error={error} /> : null}
@@ -330,7 +405,7 @@ export function ModelsRoutesPage() {
         onDelete={(model) => { if (window.confirm(deleteModelConfirmMessage(model))) deleteModel.mutate(model.id); }}
         deletePendingId={deleteModel.isPending ? deleteModel.variables : undefined}
       />
-    </> : <RoutesTable data={routes.data?.data ?? []} pending={routes.isPending} simulateId={simulateId} setSimulateId={setSimulateId} simulation={simulation} onSimulate={(id) => { setSimulateId(id); setSimulation({}); simulate.mutate(id); }} onDelete={(id) => { if (window.confirm(`Delete route “${id}”?`)) deleteRoute.mutate(id); }} />}
+    </> : <RoutesTable data={routes.data?.data ?? []} pending={routes.isPending} simulateId={simulateId} setSimulateId={setSimulateId} simulation={simulation} onEdit={startEditRoute} onSimulate={(id) => { setSimulateId(id); setSimulation({}); simulate.mutate(id); }} onDelete={(id) => { if (window.confirm(`Delete route “${id}”?`)) deleteRoute.mutate(id); }} />}
   </div>;
 }
 
@@ -345,12 +420,35 @@ function ModelsTable({ data, pending, onEdit, onDisable, onEnable, onDelete, del
 }) {
   return <section className="panel data-panel"><header className="panel__header"><div><p className="eyebrow">Current state</p><h3>Model catalog</h3><p className="muted-copy">Imported models start disabled. Hard delete removes the catalog row globally and cascades route targets.</p></div></header>{pending ? <p className="muted-copy">Loading models…</p> : data.length ? <div className="data-table"><div className="data-table__head"><span>Model</span><span>Capacity</span><span>Capabilities</span><span /></div>{data.map((model) => {
     const enabled = model.enabled !== false;
-    return <article key={model.id}><div><strong>{model.displayName}</strong><small>{model.id} · {model.providerId}{isEnvironmentManagedRevision(model.catalogRevision) ? " · env" : ""}</small></div><div><strong>{compactNumber(model.contextWindow)}</strong><small>{compactNumber(model.maxOutputTokens)} output</small></div><div className="tag-row"><Badge variant={enabled ? "success" : "neutral"} label={enabled ? "Enabled" : "Disabled"} /><Badge variant="teal" label="stream" />{model.capabilities.tools ? <Badge variant="blue" label="tools" /> : null}{model.capabilities.reasoning ? <Badge variant="purple" label="reasoning" /> : null}{model.capabilities.embeddings ? <Badge variant="orange" label="embed" /> : null}</div><div className="model-actions"><Button label="Edit" variant="ghost" size="sm" onClick={() => { onEdit(model); }} />{enabled ? <Button label="Disable" variant="secondary" size="sm" onClick={() => { onDisable(model.id); }} /> : <Button label="Enable" variant="secondary" size="sm" onClick={() => { onEnable(model.id); }} />}<Button label="Delete" variant="destructive" size="sm" isLoading={deletePendingId === model.id} onClick={() => { onDelete(model); }} /></div></article>;
+    return <article key={model.id}><div><strong>{model.displayName}</strong><small>{model.id} · {model.providerId}{isEnvironmentManagedRevision(model.catalogRevision) ? " · env" : ""}</small></div><div><strong>{compactNumber(model.contextWindow)}</strong><small>{compactNumber(model.maxOutputTokens)} output · {formatModelPricing(model)}</small></div><div className="tag-row"><Badge variant={enabled ? "success" : "neutral"} label={enabled ? "Enabled" : "Disabled"} /><Badge variant="teal" label="stream" />{model.capabilities.tools ? <Badge variant="blue" label="tools" /> : null}{model.capabilities.reasoning ? <Badge variant="purple" label="reasoning" /> : null}{model.capabilities.embeddings ? <Badge variant="orange" label="embed" /> : null}</div><div className="model-actions"><Button label="Edit" variant="ghost" size="sm" onClick={() => { onEdit(model); }} />{enabled ? <Button label="Disable" variant="secondary" size="sm" onClick={() => { onDisable(model.id); }} /> : <Button label="Enable" variant="secondary" size="sm" onClick={() => { onEnable(model.id); }} />}<Button label="Delete" variant="destructive" size="sm" isLoading={deletePendingId === model.id} onClick={() => { onDelete(model); }} /></div></article>;
   })}</div> : <p className="muted-copy">No models match this filter.</p>}</section>;
 }
 
-function RoutesTable({ data, pending, simulateId, setSimulateId, simulation, onSimulate, onDelete }: { data: RouteProfile[]; pending: boolean; simulateId: string; setSimulateId: (value: string) => void; simulation?: Record<string, unknown>; onSimulate: (id: string) => void; onDelete: (id: string) => void }) {
-  return <section className="panel data-panel"><header className="panel__header"><div><p className="eyebrow">Current state</p><h3>Routing profiles</h3></div></header>{pending ? <p className="muted-copy">Loading routes…</p> : data.length ? <div className="route-list">{data.map((route) => <article className="route-card" key={route.id}><header><div><h4>{route.name || route.id}</h4><p>{route.id} · revision {route.revision}</p></div><Badge variant={route.enabled ? "success" : "neutral"} label={route.strategy} /></header><ol>{route.targets.map((target) => <li key={`${target.modelId}:${target.connectionId}`}><span>{target.priority}</span><div><strong>{target.modelId}</strong><small>{target.connectionId}</small></div></li>)}</ol><footer><Button label="Simulate" size="sm" variant="secondary" onClick={() => { setSimulateId(route.id); onSimulate(route.id); }} /><Button label="Delete" size="sm" variant="destructive" onClick={() => { onDelete(route.id); }} /></footer>{simulateId === route.id && simulation ? <pre className="json-preview">{JSON.stringify(simulation, null, 2)}</pre> : null}</article>)}</div> : <p className="muted-copy">No route profiles.</p>}</section>;
+function RouteTargetEditor({ label, detail, target, modelItems, models, connections, onModelChange, onConnectionChange, onRemove }: {
+  label: string;
+  detail: string;
+  target: RouteTargetDraft;
+  modelItems: Array<ReturnType<typeof modelSearchItem>>;
+  models: ModelDefinition[];
+  connections: ProviderConnection[];
+  onModelChange: (id: string) => void;
+  onConnectionChange: (id: string) => void;
+  onRemove?: () => void;
+}) {
+  const connectionItems = connectionOptions(target.modelId, models, connections).map(connectionSearchItem);
+  return <article className={`route-target${onRemove ? "" : " route-target--primary"}`}>
+    <div className="route-target__order"><span>{onRemove ? "↳" : "1"}</span><div><strong>{label}</strong><small>{detail}</small></div></div>
+    <SearchableSelect label={`${label} model`} items={modelItems} value={target.modelId} onChange={onModelChange} placeholder="Select model…" isRequired emptySearchResultsText="No models match" />
+    <SearchableSelect label={`${label} connection`} items={connectionItems} value={target.connectionId} onChange={onConnectionChange} placeholder="Select connection…" isRequired isDisabled={!target.modelId} {...(!target.modelId ? { disabledMessage: "Choose a model first." } : {})} emptySearchResultsText="No connections match" />
+    {onRemove ? <Button label={`Remove ${label.toLowerCase()}`} variant="ghost" size="sm" onClick={onRemove} /> : <Badge variant="purple" label="Primary" />}
+  </article>;
+}
+
+function RoutesTable({ data, pending, simulateId, setSimulateId, simulation, onEdit, onSimulate, onDelete }: { data: RouteProfile[]; pending: boolean; simulateId: string; setSimulateId: (value: string) => void; simulation?: Record<string, unknown>; onEdit: (route: RouteProfile) => void; onSimulate: (id: string) => void; onDelete: (id: string) => void }) {
+  return <section className="panel data-panel"><header className="panel__header"><div><p className="eyebrow">Current state</p><h3>Routing profiles</h3><p className="muted-copy">Every chain has exactly one primary target followed by zero or more fallbacks.</p></div></header>{pending ? <p className="muted-copy">Loading routes…</p> : data.length ? <div className="route-list">{data.map((route) => {
+    const targets = [...route.targets].sort((left, right) => left.priority - right.priority);
+    return <article className="route-card" key={route.id}><header><div><h4>{route.name || route.id}</h4><p>{route.id} · revision {route.revision}</p></div><Badge variant={route.enabled ? "success" : "neutral"} label={route.strategy} /></header><ol>{targets.map((target, index) => <li key={`${target.modelId}:${target.connectionId}`}><span>{index === 0 ? "P" : index}</span><div><strong>{target.modelId}</strong><small>{index === 0 ? "Primary" : `Fallback ${index}`} · {target.connectionId}</small></div></li>)}</ol><footer><Button label="Edit chain" size="sm" variant="ghost" onClick={() => { onEdit(route); }} /><Button label="Simulate" size="sm" variant="secondary" onClick={() => { setSimulateId(route.id); onSimulate(route.id); }} /><Button label="Delete" size="sm" variant="destructive" onClick={() => { onDelete(route.id); }} /></footer>{simulateId === route.id && simulation ? <pre className="json-preview">{JSON.stringify(simulation, null, 2)}</pre> : null}</article>;
+  })}</div> : <p className="muted-copy">No route profiles.</p>}</section>;
 }
 
 export function connectionOptions(modelId: string, models: ModelDefinition[], connections: ProviderConnection[]): ProviderConnection[] {
@@ -360,4 +458,16 @@ export function connectionOptions(modelId: string, models: ModelDefinition[], co
 
 function compactNumber(value: number): string {
   return new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(value);
+}
+
+function validOptionalPrice(value: string | undefined): boolean {
+  if (value === undefined || value.trim() === "") return true;
+  return /^(?:\d+(?:\.\d*)?|\.\d+)$/u.test(value) && Number.isFinite(Number(value)) && Number(value) >= 0;
+}
+
+function formatModelPricing(model: ModelDefinition): string {
+  const input = model.pricing.inputPerMillionUsd;
+  const output = model.pricing.outputPerMillionUsd;
+  if (input === undefined || output === undefined) return "pricing unknown";
+  return `$${input}/$${output} per 1M`;
 }

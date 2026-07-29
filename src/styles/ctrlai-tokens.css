@@ -25,6 +25,12 @@
   --ctrl-danger: #a93636;
   --ctrl-danger-soft: #f7dfdd;
   --ctrl-shadow: 0 12px 32px rgba(24, 33, 31, 0.07);
+  --ctrl-shadow-raised: 0 18px 48px rgba(24, 33, 31, 0.11);
+  --ctrl-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --ctrl-ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ctrl-motion-fast: 140ms;
+  --ctrl-motion-base: 240ms;
+  --ctrl-motion-slow: 420ms;
   --ctrl-sidebar-width: 248px;
   background: var(--ctrl-bg);
   color: var(--ctrl-text);
@@ -53,6 +59,7 @@ html[data-theme="dark"] {
   --ctrl-danger: #ff9b98;
   --ctrl-danger-soft: #432526;
   --ctrl-shadow: 0 18px 38px rgba(0, 0, 0, 0.24);
+  --ctrl-shadow-raised: 0 24px 64px rgba(0, 0, 0, 0.36);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -80,6 +87,7 @@ html[data-theme="dark"] {
     --ctrl-danger: #ff9b98;
     --ctrl-danger-soft: #432526;
     --ctrl-shadow: 0 18px 38px rgba(0, 0, 0, 0.24);
+    --ctrl-shadow-raised: 0 24px 64px rgba(0, 0, 0, 0.36);
   }
 }
 
@@ -87,6 +95,16 @@ html[data-theme="dark"] {
 .sr-only { position: absolute !important; width: 1px !important; height: 1px !important; padding: 0 !important; margin: -1px !important; overflow: hidden !important; clip: rect(0, 0, 0, 0) !important; white-space: nowrap !important; border: 0 !important; }
 html, body, #root { min-height: 100%; margin: 0; }
 body { min-width: 320px; background: var(--ctrl-bg); color: var(--ctrl-text); }
+body::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 78% -10%, color-mix(in srgb, var(--ctrl-control) 7%, transparent), transparent 36%),
+    radial-gradient(circle at 8% 105%, color-mix(in srgb, var(--ctrl-blue) 5%, transparent), transparent 30%);
+}
 button, input, textarea, select { font: inherit; }
 button, a { -webkit-tap-highlight-color: transparent; }
 a:not([class]) { color: var(--ctrl-control); text-underline-offset: 3px; }
