@@ -1,6 +1,6 @@
 import { Badge, Button, TextInput, type BadgeVariant } from "@astryxdesign/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { Link } from "react-router-dom";
 import { InlineAlert, RequestError } from "../components/InlineAlert";
 import { HelmoraScrollArea } from "../components/HelmoraScrollArea";
@@ -386,6 +386,32 @@ function ConfigureModal({ provider, connections, initialConnectionId, onClose, o
     return () => { document.removeEventListener("keydown", close); };
   }, [onClose]);
 
+  const dialogRef = useRef<HTMLElement | null>(null);
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    const previouslyFocused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    if (dialog) {
+      const focusable = dialog.querySelector<HTMLElement>("button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])");
+      (focusable ?? dialog).focus();
+    }
+    return () => { previouslyFocused?.focus(); };
+  }, []);
+
+  function trapFocus(event: ReactKeyboardEvent<HTMLElement>) {
+    if (event.key !== "Tab") return;
+    const focusable = Array.from(event.currentTarget.querySelectorAll<HTMLElement>("button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex='-1'])"));
+    const first = focusable[0];
+    const last = focusable[focusable.length - 1];
+    if (!first || !last) return;
+    if (event.shiftKey && document.activeElement === first) {
+      event.preventDefault();
+      last.focus();
+    } else if (!event.shiftKey && document.activeElement === last) {
+      event.preventDefault();
+      first.focus();
+    }
+  }
+
   async function persist(): Promise<string | undefined> {
     if (selection === "new") {
       const created = await createConnection(draft);
@@ -396,6 +422,7 @@ function ConfigureModal({ provider, connections, initialConnectionId, onClose, o
       return created.id;
     }
     if (editing && apiKey.trim()) {
+      if (!window.confirm(`Rotate the secret for connection “${editing.name}”? The previous key stops working immediately.`)) return editing?.id;
       await rotateSecret(editing.id, apiKey.trim());
       setApiKey("");
       setDiagnose(undefined);
@@ -443,7 +470,7 @@ function ConfigureModal({ provider, connections, initialConnectionId, onClose, o
 
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
-      <section className="modal-panel modal-panel--wide" role="dialog" aria-modal="true" aria-label={`Configure ${provider.display_name}`}>
+      <section className="modal-panel modal-panel--wide" role="dialog" aria-modal="true" aria-label={`Configure ${provider.display_name}`} ref={dialogRef} onKeyDown={trapFocus}>
         <header><div><p className="eyebrow">Configure</p><h3>{provider.display_name}</h3></div><Button label="Close" variant="ghost" size="sm" onClick={onClose} /></header>
         {blocked ? <InlineAlert title={availabilityMessage(provider)} tone="info" /> : <>
           {connections.length > 0 ? (
@@ -507,7 +534,7 @@ function ConfigureModal({ provider, connections, initialConnectionId, onClose, o
                             <Button label="Clear selection" size="sm" variant="ghost" onClick={() => { setDiagnose((current) => current && current.connectionId === selection ? { ...current, selectedUpstreamIds: [] } : current); }} />
                           </div>
                         </div>
-                        <HelmoraScrollArea className="discover-picker__list" aria-label="Discovered models" role="listbox">
+                        <HelmoraScrollArea className="discover-picker__list" aria-label="Discovered models" role="group">
                           <ul>
                           {pagedModels.map((id) => {
                             const imported = existingUpstream.has(id);

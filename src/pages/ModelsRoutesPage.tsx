@@ -4,8 +4,10 @@ import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link } from "react-router-dom";
 import { InlineAlert, RequestError } from "../components/InlineAlert";
 import { HelmoraScrollArea } from "../components/HelmoraScrollArea";
+import { JsonPreview } from "../components/JsonPreview";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { api } from "../lib/api/client";
+import { onTabsKeyDown } from "../lib/tabs";
 import type {
   ConnectionImportModelsResponse,
   ConnectionValidation,
@@ -299,7 +301,10 @@ export function ModelsRoutesPage() {
 
   return <div className="page">
     <section className="page-intro"><div><p className="eyebrow">Traffic policy</p><h2>Models describe capability. Routes decide reality.</h2><p>Register or discover models, then build each Helmora route from one primary model and an ordered fallback chain.</p></div><Button label={showForm ? "Close form" : view === "models" ? (editingId ? "Cancel edit" : "Add model") : "Add route"} variant={showForm ? "secondary" : "primary"} onClick={() => { if (view === "models") startCreate(); else { if (!showForm) setRouteDraft(ROUTE_EMPTY); setShowForm((value) => !value); setEditingId(undefined); setEditingOriginal(undefined); } }} /></section>
-    <div className="segmented" role="tablist"><button role="tab" aria-selected={view === "models"} onClick={() => { setView("models"); setShowForm(false); setEditingId(undefined); setEditingOriginal(undefined); }}>Model catalog <span>{models.data?.data.length ?? 0}</span></button><button role="tab" aria-selected={view === "routes"} onClick={() => { setView("routes"); setShowForm(false); setEditingId(undefined); setEditingOriginal(undefined); }}>Route profiles <span>{routes.data?.data.length ?? 0}</span></button></div>
+    <div className="segmented" role="tablist" onKeyDown={(event) => { onTabsKeyDown(event, (index) => { setView(index === 0 ? "models" : "routes"); setShowForm(false); setEditingId(undefined); setEditingOriginal(undefined); }); }}>
+      <button role="tab" aria-selected={view === "models"} tabIndex={view === "models" ? 0 : -1} onClick={() => { setView("models"); setShowForm(false); setEditingId(undefined); setEditingOriginal(undefined); }}>Model catalog <span>{models.data?.data.length ?? 0}</span></button>
+      <button role="tab" aria-selected={view === "routes"} tabIndex={view === "routes" ? 0 : -1} onClick={() => { setView("routes"); setShowForm(false); setEditingId(undefined); setEditingOriginal(undefined); }}>Route profiles <span>{routes.data?.data.length ?? 0}</span></button>
+    </div>
 
     {view === "models" ? <section className="panel create-panel discover-panel">
       <header><p className="eyebrow">Add / discover</p><h3>Diagnose a connection and import upstream model IDs</h3></header>
@@ -326,7 +331,7 @@ export function ModelsRoutesPage() {
                 <Button label="Clear selection" size="sm" variant="ghost" isDisabled={discoverBusy} onClick={() => { setDiagnose((current) => current && current.connectionId === discoverConnectionId ? { ...current, selectedUpstreamIds: [] } : current); }} />
               </div>
             </div>
-            <HelmoraScrollArea className="discover-picker__list" aria-label="Discovered models" role="listbox">
+            <HelmoraScrollArea className="discover-picker__list" aria-label="Discovered models" role="group">
               <ul>
               {pagedModels.map((id) => {
                 const imported = existingUpstream.has(id);
@@ -399,26 +404,28 @@ export function ModelsRoutesPage() {
       <ModelsTable
         data={filteredCatalog}
         pending={models.isPending}
+        error={models.error}
         onEdit={startEdit}
         onDisable={(id) => { if (window.confirm(`Disable model “${id}”?`)) disableModel.mutate(id); }}
         onEnable={(id) => { enableModel.mutate(id); }}
         onDelete={(model) => { if (window.confirm(deleteModelConfirmMessage(model))) deleteModel.mutate(model.id); }}
         deletePendingId={deleteModel.isPending ? deleteModel.variables : undefined}
       />
-    </> : <RoutesTable data={routes.data?.data ?? []} pending={routes.isPending} simulateId={simulateId} setSimulateId={setSimulateId} simulation={simulation} onEdit={startEditRoute} onSimulate={(id) => { setSimulateId(id); setSimulation({}); simulate.mutate(id); }} onDelete={(id) => { if (window.confirm(`Delete route “${id}”?`)) deleteRoute.mutate(id); }} />}
+    </> : <RoutesTable data={routes.data?.data ?? []} pending={routes.isPending} error={routes.error} simulateId={simulateId} setSimulateId={setSimulateId} simulation={simulation} onEdit={startEditRoute} onSimulate={(id) => { setSimulateId(id); setSimulation({}); simulate.mutate(id); }} onDelete={(id) => { if (window.confirm(`Delete route “${id}”?`)) deleteRoute.mutate(id); }} />}
   </div>;
 }
 
-function ModelsTable({ data, pending, onEdit, onDisable, onEnable, onDelete, deletePendingId }: {
+function ModelsTable({ data, pending, error, onEdit, onDisable, onEnable, onDelete, deletePendingId }: {
   data: ModelDefinition[];
   pending: boolean;
+  error: unknown;
   onEdit: (model: ModelDefinition) => void;
   onDisable: (id: string) => void;
   onEnable: (id: string) => void;
   onDelete: (model: ModelDefinition) => void;
   deletePendingId: string | undefined;
 }) {
-  return <section className="panel data-panel"><header className="panel__header"><div><p className="eyebrow">Current state</p><h3>Model catalog</h3><p className="muted-copy">Imported models start disabled. Hard delete removes the catalog row globally and cascades route targets.</p></div></header>{pending ? <p className="muted-copy">Loading models…</p> : data.length ? <div className="data-table"><div className="data-table__head"><span>Model</span><span>Capacity</span><span>Capabilities</span><span /></div>{data.map((model) => {
+  return <section className="panel data-panel"><header className="panel__header"><div><p className="eyebrow">Current state</p><h3>Model catalog</h3><p className="muted-copy">Imported models start disabled. Hard delete removes the catalog row globally and cascades route targets.</p></div></header>{error ? <RequestError error={error} /> : pending ? <p className="muted-copy">Loading models…</p> : data.length ? <div className="data-table"><div className="data-table__head"><span>Model</span><span>Capacity</span><span>Capabilities</span><span /></div>{data.map((model) => {
     const enabled = model.enabled !== false;
     return <article key={model.id}><div><strong>{model.displayName}</strong><small>{model.id} · {model.providerId}{isEnvironmentManagedRevision(model.catalogRevision) ? " · env" : ""}</small></div><div><strong>{compactNumber(model.contextWindow)}</strong><small>{compactNumber(model.maxOutputTokens)} output · {formatModelPricing(model)}</small></div><div className="tag-row"><Badge variant={enabled ? "success" : "neutral"} label={enabled ? "Enabled" : "Disabled"} /><Badge variant="teal" label="stream" />{model.capabilities.tools ? <Badge variant="blue" label="tools" /> : null}{model.capabilities.reasoning ? <Badge variant="purple" label="reasoning" /> : null}{model.capabilities.embeddings ? <Badge variant="orange" label="embed" /> : null}</div><div className="model-actions"><Button label="Edit" variant="ghost" size="sm" onClick={() => { onEdit(model); }} />{enabled ? <Button label="Disable" variant="secondary" size="sm" onClick={() => { onDisable(model.id); }} /> : <Button label="Enable" variant="secondary" size="sm" onClick={() => { onEnable(model.id); }} />}<Button label="Delete" variant="destructive" size="sm" isLoading={deletePendingId === model.id} onClick={() => { onDelete(model); }} /></div></article>;
   })}</div> : <p className="muted-copy">No models match this filter.</p>}</section>;
@@ -444,10 +451,10 @@ function RouteTargetEditor({ label, detail, target, modelItems, models, connecti
   </article>;
 }
 
-function RoutesTable({ data, pending, simulateId, setSimulateId, simulation, onEdit, onSimulate, onDelete }: { data: RouteProfile[]; pending: boolean; simulateId: string; setSimulateId: (value: string) => void; simulation?: Record<string, unknown>; onEdit: (route: RouteProfile) => void; onSimulate: (id: string) => void; onDelete: (id: string) => void }) {
-  return <section className="panel data-panel"><header className="panel__header"><div><p className="eyebrow">Current state</p><h3>Routing profiles</h3><p className="muted-copy">Every chain has exactly one primary target followed by zero or more fallbacks.</p></div></header>{pending ? <p className="muted-copy">Loading routes…</p> : data.length ? <div className="route-list">{data.map((route) => {
+function RoutesTable({ data, pending, error, simulateId, setSimulateId, simulation, onEdit, onSimulate, onDelete }: { data: RouteProfile[]; pending: boolean; error: unknown; simulateId: string; setSimulateId: (value: string) => void; simulation?: Record<string, unknown>; onEdit: (route: RouteProfile) => void; onSimulate: (id: string) => void; onDelete: (id: string) => void }) {
+  return <section className="panel data-panel"><header className="panel__header"><div><p className="eyebrow">Current state</p><h3>Routing profiles</h3><p className="muted-copy">Every chain has exactly one primary target followed by zero or more fallbacks.</p></div></header>{error ? <RequestError error={error} /> : pending ? <p className="muted-copy">Loading routes…</p> : data.length ? <div className="route-list">{data.map((route) => {
     const targets = [...route.targets].sort((left, right) => left.priority - right.priority);
-    return <article className="route-card" key={route.id}><header><div><h4>{route.name || route.id}</h4><p>{route.id} · revision {route.revision}</p></div><Badge variant={route.enabled ? "success" : "neutral"} label={route.strategy} /></header><ol>{targets.map((target, index) => <li key={`${target.modelId}:${target.connectionId}`}><span>{index === 0 ? "P" : index}</span><div><strong>{target.modelId}</strong><small>{index === 0 ? "Primary" : `Fallback ${index}`} · {target.connectionId}</small></div></li>)}</ol><footer><Button label="Edit chain" size="sm" variant="ghost" onClick={() => { onEdit(route); }} /><Button label="Simulate" size="sm" variant="secondary" onClick={() => { setSimulateId(route.id); onSimulate(route.id); }} /><Button label="Delete" size="sm" variant="destructive" onClick={() => { onDelete(route.id); }} /></footer>{simulateId === route.id && simulation ? <pre className="json-preview">{JSON.stringify(simulation, null, 2)}</pre> : null}</article>;
+    return <article className="route-card" key={route.id}><header><div><h4>{route.name || route.id}</h4><p>{route.id} · revision {route.revision}</p></div><Badge variant={route.enabled ? "success" : "neutral"} label={route.strategy} /></header><ol>{targets.map((target, index) => <li key={`${target.modelId}:${target.connectionId}`}><span>{index === 0 ? "P" : index}</span><div><strong>{target.modelId}</strong><small>{index === 0 ? "Primary" : `Fallback ${index}`} · {target.connectionId}</small></div></li>)}</ol><footer><Button label="Edit chain" size="sm" variant="ghost" onClick={() => { onEdit(route); }} /><Button label="Simulate" size="sm" variant="secondary" onClick={() => { setSimulateId(route.id); onSimulate(route.id); }} /><Button label="Delete" size="sm" variant="destructive" onClick={() => { onDelete(route.id); }} /></footer>{simulateId === route.id && simulation ? <JsonPreview value={simulation} /> : null}</article>;
   })}</div> : <p className="muted-copy">No route profiles.</p>}</section>;
 }
 

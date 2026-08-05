@@ -3,7 +3,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { InlineAlert, RequestError } from "../components/InlineAlert";
+import { JsonPreview } from "../components/JsonPreview";
 import { api } from "../lib/api/client";
+import { formatDuration } from "../lib/format";
 import type { ListResponse, ToolDefinition } from "../lib/api/types";
 
 type ToolRisk = "read" | "network" | "write" | "dangerous" | string;
@@ -134,7 +136,7 @@ export function ToolsPage() {
         </form>
         {importManifest.error ? <RequestError error={importManifest.error} /> : null}
         {importedCount !== undefined ? <InlineAlert title={`${importedCount} web tool${importedCount === 1 ? "" : "s"} saved to SQLite.`} tone="success" /> : null}
-        <details><summary>Manifest format</summary><pre className="json-preview">{JSON.stringify({ schema_version: 1, tools: [{ name: "weather_lookup", version: "1", description: "Look up public weather data.", input_schema: { type: "object", required: ["city"], properties: { city: { type: "string" } }, additionalProperties: false }, endpoint: { url: "https://api.example.com/weather", method: "POST" } }] }, null, 2)}</pre></details>
+        <JsonPreview value={{ schema_version: 1, tools: [{ name: "weather_lookup", version: "1", description: "Look up public weather data.", input_schema: { type: "object", required: ["city"], properties: { city: { type: "string" } }, additionalProperties: false }, endpoint: { url: "https://api.example.com/weather", method: "POST" } }] }} label="Manifest format" />
       </section>
 
       <InlineAlert title="Agent-ready registry" tone="success">
@@ -228,7 +230,7 @@ export function ToolsPage() {
               {result !== undefined ? (
                 <section className="tool-result">
                   <header><div><p className="eyebrow">Execution result</p><h4>Bounded output</h4></div><Badge variant="success" label="Completed" /></header>
-                  <pre className="json-preview">{JSON.stringify(result, null, 2)}</pre>
+                  <JsonPreview value={result} />
                 </section>
               ) : null}
             </>
@@ -262,7 +264,7 @@ function SchemaSummary({ schema }: { schema: Record<string, unknown> }) {
           })}
         </div>
       ) : <p className="muted-copy">This tool accepts an empty arguments object.</p>}
-      <details><summary>View raw schema</summary><pre className="json-preview">{JSON.stringify(schema, null, 2)}</pre></details>
+      <JsonPreview value={schema} label="View raw schema" />
     </section>
   );
 }
@@ -317,8 +319,4 @@ function toolGlyph(name: string): string {
   if (name.includes("time")) return "◷";
   if (name.includes("calculator")) return "∑";
   return "⌁";
-}
-
-function formatDuration(milliseconds: number): string {
-  return milliseconds >= 1_000 ? `${Math.round(milliseconds / 1_000)}s` : `${milliseconds}ms`;
 }

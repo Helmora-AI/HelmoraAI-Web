@@ -53,6 +53,7 @@ export function ChatPage() {
   const [runNotice, setRunNotice] = useState<string>();
   const [modelMenuOpen, setModelMenuOpen] = useState(false);
   const [modelSearch, setModelSearch] = useState("");
+  const [modelHighlight, setModelHighlight] = useState(0);
   const [listening, setListening] = useState(false);
   const controller = useRef<AbortController | undefined>(undefined);
   const recognitionRef = useRef<SpeechRecognitionLike | undefined>(undefined);
@@ -101,6 +102,7 @@ export function ChatPage() {
     const needle = modelSearch.trim().toLowerCase();
     return (models.data?.data ?? []).filter((item) => !needle || `${item.displayName} ${item.id} ${item.owned_by ?? ""}`.toLowerCase().includes(needle));
   }, [modelSearch, models.data?.data]);
+  const modelHighlightItem = filteredModels[modelHighlight];
   const voiceSupported = typeof window !== "undefined" && Boolean((window as Window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }).SpeechRecognition
     ?? (window as Window & { SpeechRecognition?: SpeechRecognitionConstructor; webkitSpeechRecognition?: SpeechRecognitionConstructor }).webkitSpeechRecognition);
 
@@ -428,17 +430,25 @@ export function ChatPage() {
                   aria-label={`Model ${activeModel?.displayName ?? (model || "not selected")}`}
                   aria-haspopup="listbox"
                   aria-expanded={modelMenuOpen}
+                  aria-controls="chat-model-listbox"
                   disabled={running || models.isPending || !models.data?.data.length}
-                  onClick={() => { setModelMenuOpen((open) => !open); }}
+                  onClick={() => { setModelMenuOpen((open) => { if (!open) setModelHighlight(0); return !open; }); }}
                 >
                   <span>{activeModel?.displayName ?? (models.isPending ? "Loading models" : "Select model")}</span>
                   {Array.isArray(activeModel?.capabilities) && activeModel.capabilities.includes("reasoning") ? <small>Reasoning</small> : null}
                   <svg viewBox="0 0 16 16" aria-hidden="true"><path d="m4 6 4 4 4-4" /></svg>
                 </button>
                 {modelMenuOpen ? <div className="composer-model__popover">
-                  <label><span className="sr-only">Search models</span><input type="search" autoFocus value={modelSearch} onChange={(event) => { setModelSearch(event.target.value); }} placeholder="Search models and routes" /></label>
-                  <div role="listbox" aria-label="Available models">
-                    {filteredModels.map((item) => <button key={item.id} type="button" role="option" aria-selected={item.id === model} onClick={() => { setModel(item.id); setModelMenuOpen(false); setModelSearch(""); }}>
+                  <label><span className="sr-only">Search models</span><input type="search" role="combobox" aria-expanded={modelMenuOpen} aria-controls="chat-model-listbox" aria-autocomplete="list" aria-activedescendant={modelHighlightItem ? `chat-model-option-${modelHighlightItem.id}` : undefined} autoComplete="off" autoFocus value={modelSearch} onChange={(event) => { setModelSearch(event.target.value); setModelHighlight(0); }} onKeyDown={(event) => {
+                    if (event.key === "ArrowDown") { event.preventDefault(); setModelHighlight((current) => Math.min(filteredModels.length - 1, current + 1)); }
+                    else if (event.key === "ArrowUp") { event.preventDefault(); setModelHighlight((current) => Math.max(0, current - 1)); }
+                    else if (event.key === "Home") { event.preventDefault(); setModelHighlight(0); }
+                    else if (event.key === "End") { event.preventDefault(); setModelHighlight(Math.max(0, filteredModels.length - 1)); }
+                    else if (event.key === "Enter") { const item = filteredModels[modelHighlight] ?? filteredModels[0]; if (item) { setModel(item.id); setModelMenuOpen(false); setModelSearch(""); } event.preventDefault(); }
+                    else if (event.key === "Escape") { if (modelSearch) setModelSearch(""); else setModelMenuOpen(false); }
+                  }} placeholder="Search models and routes" /></label>
+                  <div id="chat-model-listbox" role="listbox" aria-label="Available models">
+                    {filteredModels.map((item) => <button key={item.id} id={`chat-model-option-${item.id}`} type="button" role="option" aria-selected={item.id === model} onClick={() => { setModel(item.id); setModelMenuOpen(false); setModelSearch(""); }}>
                       <span><strong>{item.displayName}</strong><small>{item.virtual ? "Helmora route" : item.owned_by ?? item.id}</small></span>
                       {item.id === model ? <span aria-hidden="true">✓</span> : null}
                     </button>)}

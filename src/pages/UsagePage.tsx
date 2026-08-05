@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { HelmoraScrollArea } from "../components/HelmoraScrollArea";
 import { RequestError } from "../components/InlineAlert";
+import { JsonPreview } from "../components/JsonPreview";
+import { Metric } from "../components/Metric";
 import { api } from "../lib/api/client";
 import type { UsageRequest, UsageResponse } from "../lib/api/types";
 import {
@@ -268,10 +270,6 @@ export function UsagePage() {
   );
 }
 
-function Metric({ label, value, note, tone }: { label: string; value: string; note: string; tone: string }) {
-  return <article className={`metric metric--${tone}`}><span>{label}</span><strong>{value}</strong><small>{note}</small></article>;
-}
-
 function RequestInspector({ details }: { details: Record<string, unknown> }) {
   const attempts = Array.isArray(details.attempts) ? details.attempts as Array<Record<string, unknown>> : [];
   return (
@@ -310,8 +308,8 @@ function RequestInspector({ details }: { details: Record<string, unknown> }) {
         <h4>Attempts</h4>
         {attempts.length ? (
           <div className="usage-attempts">
-            {attempts.map((attempt) => (
-              <article key={String(attempt.attempt_index ?? attempt.created_at ?? Math.random())}>
+            {attempts.map((attempt, index) => (
+              <article key={String(attempt.attempt_index ?? attempt.created_at ?? index)}>
                 <header>
                   <strong>Attempt {Number(attempt.attempt_index ?? 0) + 1}</strong>
                   <Badge variant={statusVariant(String(attempt.status ?? "unknown"))} label={String(attempt.status ?? "unknown")} />
@@ -339,7 +337,7 @@ function RequestInspector({ details }: { details: Record<string, unknown> }) {
       </section>
       <details className="usage-advanced">
         <summary>Advanced</summary>
-        <pre className="json-preview request-json">{JSON.stringify(details, null, 2)}</pre>
+        <JsonPreview value={details} className="request-json" />
       </details>
     </div>
   );

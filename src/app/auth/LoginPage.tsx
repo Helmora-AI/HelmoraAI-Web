@@ -23,8 +23,8 @@ export function LoginPage() {
   return (
     <AuthFrame eyebrow="Administrator access" title="Welcome back" description="Sign in to this Helmora Hub. Your session stays in a secure HttpOnly cookie.">
       <form className="auth-form" onSubmit={(event) => { void submit(event); }}>
-        <TextInput label="Username" value={username} onChange={setUsername} htmlName="username" isRequired />
-        <TextInput label="Password" type="password" value={password} onChange={setPassword} htmlName="password" isRequired />
+        <TextInput label="Username" value={username} onChange={setUsername} htmlName="username" autoComplete="username" isRequired />
+        <TextInput label="Password" type="password" value={password} onChange={setPassword} htmlName="password" autoComplete="current-password" isRequired />
         {error ? <RequestError error={error} /> : null}
         <Button type="submit" label="Sign in to Helmora" variant="primary" width="100%" isLoading={busy} isDisabled={!username.trim() || !password} />
       </form>

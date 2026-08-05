@@ -2,6 +2,7 @@ import { Badge, Button } from "@astryxdesign/core";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { RequestError } from "../components/InlineAlert";
+import { Metric } from "../components/Metric";
 import { ProviderIcon, providerIconBadge } from "../components/ProviderIcon";
 import { api } from "../lib/api/client";
 import type { ListResponse, ModelSummary, RuntimeStatus, RuntimeVersion } from "../lib/api/types";
@@ -38,7 +39,7 @@ export function OverviewPage() {
       {primaryError ? <RequestError error={primaryError} /> : null}
       <section className="metric-strip" aria-label="Hub summary">
         <Metric label="Runtime" value={runtime.isPending ? "—" : runtime.data?.status ?? "Unknown"} note={version.data ? `v${version.data.version}` : "Reading version"} tone={runtime.data?.status === "ready" ? "teal" : "amber"} />
-        <Metric label="Provider connections" value={providers.isPending ? "—" : String(providers.data?.connections.length ?? 0)} note={`${providers.data?.providers.length ?? 0} adapters available`} tone="blue" />
+        <Metric label="Provider connections" value={providers.isPending ? "—" : String(providers.data?.connections.length ?? 0)} note={providers.isPending ? "Reading adapters" : `${providers.data?.providers.length ?? 0} adapters available`} tone="blue" />
         <Metric label="Models" value={models.isPending ? "—" : String(models.data?.data.length ?? 0)} note="Direct and virtual catalog" tone="violet" />
         <Metric label="Inflight requests" value={runtime.isPending ? "—" : String(runtime.data?.inflight ?? 0)} note={runtime.data?.database === "ok" ? "Database healthy" : `Database: ${runtime.data?.database ?? "unknown"}`} tone="coral" />
       </section>
@@ -55,18 +56,16 @@ export function OverviewPage() {
         </section>
         <section className="panel">
           <header className="panel__header"><div><p className="eyebrow">Recent</p><h3>Conversations</h3></div><Link to="/conversations">View all</Link></header>
-          {conversations.isPending ? <LoadingRows /> : conversations.data?.data.length ? <CompactRows rows={conversations.data.data} primary="title" fallback="Untitled conversation" /> : <EmptyCopy title="A quiet workspace" copy="Your recent conversations will appear here." action="Open chat" href="/chat" />}
+          {conversations.isPending ? <LoadingRows /> : conversations.error ? <RequestError error={conversations.error} /> : conversations.data?.data.length ? <CompactRows rows={conversations.data.data} primary="title" fallback="Untitled conversation" /> : <EmptyCopy title="A quiet workspace" copy="Your recent conversations will appear here." action="Open chat" href="/chat" />}
         </section>
         <section className="panel">
           <header className="panel__header"><div><p className="eyebrow">Durable work</p><h3>Tasks</h3></div><Link to="/tasks">View queue</Link></header>
-          {tasks.isPending ? <LoadingRows /> : tasks.data?.data.length ? <CompactRows rows={tasks.data.data} primary="kind" fallback="Task" status="status" /> : <EmptyCopy title="No tasks running" copy="Research and background jobs will report progress here." action="Start research" href="/research" />}
+          {tasks.isPending ? <LoadingRows /> : tasks.error ? <RequestError error={tasks.error} /> : tasks.data?.data.length ? <CompactRows rows={tasks.data.data} primary="kind" fallback="Task" status="status" /> : <EmptyCopy title="No tasks running" copy="Research and background jobs will report progress here." action="Start research" href="/research" />}
         </section>
       </div>
     </div>
   );
 }
-
-function Metric({ label, value, note, tone }: { label: string; value: string; note: string; tone: string }) { return <article className={`metric metric--${tone}`}><span>{label}</span><strong>{value}</strong><small>{note}</small></article>; }
 
 function ConnectionRow({ connection, provider }: { connection: Record<string, unknown>; provider?: ProviderRecord }) {
   const enabled = connection.enabled !== false && connection.disabled !== true;

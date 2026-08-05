@@ -1,9 +1,12 @@
 import { Badge, Button, TextInput } from "@astryxdesign/core";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
+import { AsyncList } from "../components/AsyncList";
 import { HelmoraScrollArea } from "../components/HelmoraScrollArea";
 import { RequestError } from "../components/InlineAlert";
+import { RecordRow } from "../components/RecordRow";
 import { api } from "../lib/api/client";
+import { formatDate } from "../lib/format";
 import type { Conversation, ConversationDetail, ConversationList, StoredMessage } from "../lib/api/types";
 
 export function ConversationsPage() {
@@ -46,7 +49,7 @@ export function ConversationsPage() {
       <div className="master-detail">
         <section className="panel master-list">
           <div className="list-toolbar"><TextInput label="Search conversations" isLabelHidden value={search} onChange={setSearch} placeholder="Search titles…" hasClear /><label className="toggle"><input type="checkbox" checked={archived} onChange={(event) => { setArchived(event.target.checked); setSelectedId(undefined); }} /><span aria-hidden="true" /><strong>Archived</strong></label></div>
-          {list.error ? <RequestError error={list.error} /> : list.isPending ? <p className="muted-copy">Loading conversations…</p> : visible.length ? <div className="record-list">{visible.map((conversation) => <button className={selectedId === conversation.id ? "record-row record-row--active" : "record-row"} key={conversation.id} onClick={() => { setSelectedId(conversation.id); setRename(conversation.title); }}><span className="record-row__mark">C</span><span><strong>{conversation.title}</strong><small>{formatDate(conversation.updatedAt)}</small></span><Badge variant={conversation.archived ? "neutral" : "teal"} label={conversation.archived ? "Archived" : "Active"} /></button>)}</div> : <p className="muted-copy">No matching conversations.</p>}
+          <AsyncList error={list.error} isPending={list.isPending} loadingLabel="Loading conversations…">{visible.length ? <div className="record-list">{visible.map((conversation) => <RecordRow key={conversation.id} mark="C" title={conversation.title} subtitle={formatDate(conversation.updatedAt)} active={selectedId === conversation.id} onClick={() => { setSelectedId(conversation.id); setRename(conversation.title); }} trailing={<Badge variant={conversation.archived ? "neutral" : "teal"} label={conversation.archived ? "Archived" : "Active"} />} />)}</div> : <p className="muted-copy">No matching conversations.</p>}</AsyncList>
         </section>
         <section className="panel detail-panel">
           {!selectedId ? <DetailEmpty /> : detail.isPending ? <p className="muted-copy">Loading conversation…</p> : detail.error ? <RequestError error={detail.error} /> : active ? <>
@@ -72,4 +75,4 @@ export function ConversationsPage() {
 
 function DetailEmpty() { return <div className="detail-empty"><span>C</span><h3>Select a conversation</h3><p>Its messages, metadata, and lifecycle controls will appear here.</p></div>; }
 function StoredMessageRow({ message }: { message: StoredMessage }) { const text = message.parts.filter((part) => part.type === "text").map((part) => part.text ?? "").join(""); return <article className={`stored-message stored-message--${message.role}`}><header><strong>{message.role}</strong><span>#{message.sequence}</span><time>{formatDate(message.createdAt)}</time></header><p>{text || `[${message.parts.map((part) => part.type).join(", ")}]`}</p></article>; }
-function formatDate(value: string): string { const date = new Date(value); return Number.isNaN(date.valueOf()) ? value : new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date); }
+
