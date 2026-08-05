@@ -16,6 +16,7 @@ import {
 } from "recharts";
 import type { ReactNode } from "react";
 import type { UsageBucket } from "../lib/api/types";
+import { prefersReducedMotion } from "../lib/reducedMotion";
 
 export type UsageMetric = "requests" | "tokens" | "cost" | "latency";
 
@@ -38,6 +39,7 @@ const chartMargin = { top: 12, right: 8, bottom: 0, left: -12 };
 export default function UsageChart({ buckets, metric, height = 240 }: UsageChartProps) {
   if (!buckets.length) return <div className="chart-empty" role="status">Usage history will appear after the first inference request.</div>;
 
+  const reduced = prefersReducedMotion();
   const label = metricLabel(metric);
   if (metric === "tokens") {
     return (
@@ -57,8 +59,8 @@ export default function UsageChart({ buckets, metric, height = 240 }: UsageChart
           <ChartAxes />
           <ChartTooltip formatter={(value) => formatCompact(Number(value))} />
           <Legend iconType="circle" iconSize={7} />
-          <Area type="monotone" dataKey="input_tokens" name="Input tokens" stroke="var(--ctrl-blue)" fill="url(#inputFill)" strokeWidth={2} animationDuration={500} />
-          <Area type="monotone" dataKey="output_tokens" name="Output tokens" stroke="var(--ctrl-violet)" fill="url(#outputFill)" strokeWidth={2} animationDuration={620} />
+          <Area type="monotone" dataKey="input_tokens" name="Input tokens" stroke="var(--ctrl-blue)" fill="url(#inputFill)" strokeWidth={2} animationDuration={460} animationBegin={0} animationEasing="ease-out" isAnimationActive={!reduced} />
+          <Area type="monotone" dataKey="output_tokens" name="Output tokens" stroke="var(--ctrl-violet)" fill="url(#outputFill)" strokeWidth={2} animationDuration={460} animationBegin={80} animationEasing="ease-out" isAnimationActive={!reduced} />
         </AreaChart>
       </ChartShell>
     );
@@ -71,7 +73,7 @@ export default function UsageChart({ buckets, metric, height = 240 }: UsageChart
           <ChartGrid />
           <ChartAxes />
           <ChartTooltip formatter={(value) => [`${Math.round(Number(value))} ms`, "Average latency"]} />
-          <Line type="monotone" dataKey="average_latency_ms" name="Avg latency" stroke="var(--ctrl-coral)" strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} connectNulls animationDuration={580} />
+          <Line type="monotone" dataKey="average_latency_ms" name="Avg latency" stroke="var(--ctrl-coral)" strokeWidth={2.4} dot={false} activeDot={{ r: 4 }} connectNulls animationDuration={480} animationBegin={0} animationEasing="ease-out" isAnimationActive={!reduced} />
         </LineChart>
       </ChartShell>
     );
@@ -85,8 +87,8 @@ export default function UsageChart({ buckets, metric, height = 240 }: UsageChart
           <ChartAxes />
           <ChartTooltip formatter={(value, name) => name === "Known estimate" ? [formatCost(Number(value)), name] : [Number(value), name]} />
           <Legend iconType="circle" iconSize={7} />
-          <Bar dataKey="cost_usd" name="Known estimate" fill="var(--ctrl-control)" radius={[5, 5, 0, 0]} animationDuration={500} />
-          <Line type="monotone" dataKey="unknown_cost_requests" name="Unknown pricing" stroke="var(--ctrl-amber)" strokeWidth={1.8} dot={false} animationDuration={620} />
+          <Bar dataKey="cost_usd" name="Known estimate" fill="var(--ctrl-control)" radius={[5, 5, 0, 0]} animationDuration={420} animationBegin={0} animationEasing="ease-out" isAnimationActive={!reduced} />
+          <Line type="monotone" dataKey="unknown_cost_requests" name="Unknown pricing" stroke="var(--ctrl-amber)" strokeWidth={1.8} dot={false} animationDuration={460} animationBegin={80} animationEasing="ease-out" isAnimationActive={!reduced} />
         </ComposedChart>
       </ChartShell>
     );
@@ -99,10 +101,10 @@ export default function UsageChart({ buckets, metric, height = 240 }: UsageChart
         <ChartAxes />
         <ChartTooltip />
         <Legend iconType="circle" iconSize={7} />
-        <Bar dataKey="successful" stackId="status" name="Successful" fill="var(--ctrl-control)" animationDuration={450} />
-        <Bar dataKey="failed" stackId="status" name="Failed" fill="var(--ctrl-danger)" animationDuration={520} />
-        <Bar dataKey="cancelled" stackId="status" name="Cancelled" fill="var(--ctrl-faint)" animationDuration={580} />
-        <Bar dataKey="partial" stackId="status" name="Partial" fill="var(--ctrl-amber)" radius={[4, 4, 0, 0]} animationDuration={640} />
+        <Bar dataKey="successful" stackId="status" name="Successful" fill="var(--ctrl-control)" animationDuration={420} animationBegin={0} animationEasing="ease-out" isAnimationActive={!reduced} />
+        <Bar dataKey="failed" stackId="status" name="Failed" fill="var(--ctrl-danger)" animationDuration={420} animationBegin={60} animationEasing="ease-out" isAnimationActive={!reduced} />
+        <Bar dataKey="cancelled" stackId="status" name="Cancelled" fill="var(--ctrl-faint)" animationDuration={420} animationBegin={120} animationEasing="ease-out" isAnimationActive={!reduced} />
+        <Bar dataKey="partial" stackId="status" name="Partial" fill="var(--ctrl-amber)" radius={[4, 4, 0, 0]} animationDuration={420} animationBegin={180} animationEasing="ease-out" isAnimationActive={!reduced} />
       </BarChart>
     </ChartShell>
   );

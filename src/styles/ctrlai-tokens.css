@@ -31,6 +31,8 @@
   --ctrl-motion-fast: 140ms;
   --ctrl-motion-base: 240ms;
   --ctrl-motion-slow: 420ms;
+  --ctrl-motion-press: 80ms;
+  --ctrl-motion-stagger: 55ms;
   --ctrl-sidebar-width: 248px;
   background: var(--ctrl-bg);
   color: var(--ctrl-text);

@@ -1,7 +1,7 @@
 import { Badge, Button } from "@astryxdesign/core";
 import { useQuery } from "@tanstack/react-query";
 import { useEffect, useMemo, useState } from "react";
-import { NavLink, Outlet, useLocation } from "react-router-dom";
+import { NavLink, Outlet, useLocation, useNavigationType } from "react-router-dom";
 import { Brand } from "../components/Brand";
 import { FunctionIcon, type FunctionIconName } from "../components/FunctionIcon";
 import { api } from "../lib/api/client";
@@ -50,6 +50,7 @@ export function AppShell() {
   const { logout, principal } = useAuth();
   const { preference, setPreference } = useThemePreference();
   const location = useLocation();
+  const navigationType = useNavigationType();
   const [mobileOpen, setMobileOpen] = useState(false);
   const latency = useQuery({
     queryKey: ["hub-latency"],
@@ -119,7 +120,7 @@ export function AppShell() {
           </div>
         </header>
         <main className="workspace">
-          <div key={location.pathname} className="workspace__route">
+          <div key={location.pathname} className={`workspace__route workspace__route--${navigationType === "POP" ? "back" : "forward"}`}>
             <Outlet />
           </div>
         </main>

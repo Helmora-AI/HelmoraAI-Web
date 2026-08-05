@@ -386,7 +386,7 @@ export function ChatPage() {
             onScroll={onTranscriptScroll}
           >
             <div aria-busy={running}>
-              {detail.isPending && conversationId ? <TranscriptSkeleton /> : visibleMessages.length ? visibleMessages.map((message) => <MessageBubble key={message.id} message={message} />) : (
+              {detail.isPending && conversationId ? <TranscriptSkeleton /> : visibleMessages.length ? visibleMessages.map((message, index) => <MessageBubble key={message.id} message={message} latest={index === visibleMessages.length - 1 && message.role === "assistant" && !message.pending} />) : (
                 <ChatEmpty
                   modelsReady={Boolean(models.data?.data.length)}
                   onPrompt={(prompt) => {
@@ -481,7 +481,7 @@ export function ChatPage() {
 
 function toDraftMessage(message: StoredMessage): DraftMessage { return { id: message.id, role: message.role === "assistant" ? "assistant" : "user", text: message.parts.filter((part) => part.type === "text").map((part) => part.text ?? "").join("") }; }
 function toResponseInput(message: StoredMessage): Record<string, unknown> | undefined { if (!["system", "developer", "user", "assistant"].includes(message.role)) return undefined; return { type: "message", role: message.role, content: message.parts.filter((part) => part.type === "text").map((part) => ({ type: message.role === "assistant" ? "output_text" : "input_text", text: part.text ?? "" })) }; }
-function MessageBubble({ message }: { message: DraftMessage }) {
+function MessageBubble({ message, latest }: { message: DraftMessage; latest?: boolean }) {
   const [copied, setCopied] = useState(false);
   async function copyResponse() {
     try {
@@ -491,7 +491,7 @@ function MessageBubble({ message }: { message: DraftMessage }) {
     } catch { setCopied(false); }
   }
   return (
-    <article className={`message message--${message.role}${message.pending ? " message--pending" : ""}`}>
+    <article className={`message message--${message.role}${message.pending ? " message--pending" : ""}${latest ? " message--latest" : ""}`}>
       <header>
         {message.role === "assistant" ? <span className="message__avatar" aria-hidden="true">H</span> : null}
         <span>{message.role === "assistant" ? "Helmora" : "You"}</span>
@@ -500,7 +500,13 @@ function MessageBubble({ message }: { message: DraftMessage }) {
           <button className="message__copy" type="button" onClick={() => { void copyResponse(); }}>{copied ? "Copied" : "Copy response"}</button>
         ) : null}
       </header>
-      <div className="message__content"><ReactMarkdown components={{ pre: CodeBlock }} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{message.text || "…"}</ReactMarkdown></div>
+      <div className="message__content">
+        {message.pending && !message.text ? (
+          <span className="message__typing" aria-hidden="true"><i /><i /><i /></span>
+        ) : (
+          <ReactMarkdown components={{ pre: CodeBlock }} remarkPlugins={[remarkGfm]} rehypePlugins={[rehypeSanitize]}>{message.text || "…"}</ReactMarkdown>
+        )}
+      </div>
     </article>
   );
 }

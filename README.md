@@ -69,6 +69,10 @@ Highlights:
   isolated to the selected connection.
 - Light, dark and system themes, responsive navigation, lazy-loaded
   routes/charts and reduced-motion handling are included.
+- Motion is centralized in a small token-driven system (single keyframe
+  library, `--ctrl-motion-*` durations and `--ctrl-ease-*` curves, staggered
+  entrances, direction-aware route transitions, live metric count-ups and chat
+  streaming feedback); see [Motion and interaction design](#motion-and-interaction-design).
 
 ## Requirements
 
@@ -218,6 +222,37 @@ shows a recovery UI with a manual Reload action instead of a black screen.
   overflow for wide request tables.
 - Browser evidence for these scroll surfaces covers Chromium and WebKit once
   `e2e/scroll-containment.e2e.ts` passes with real scroll geometry assertions.
+
+## Motion and interaction design
+
+Motion is defined once and reused, never hand-written per page:
+
+- **Tokens**: durations `--ctrl-motion-fast` (140ms), `--ctrl-motion-base`
+  (240ms), `--ctrl-motion-slow` (420ms), `--ctrl-motion-press` (80ms) and
+  `--ctrl-motion-stagger` (55ms); easing `--ctrl-ease-out` for entrances and
+  `--ctrl-ease-spring` for state changes such as the toggle thumb and popover
+  chevrons.
+- **Keyframe library**: all entrance/exit animations (route, panel, modal,
+  alert, message, receipt, result, typing, shimmer and pulse) live in one
+  `AppShell.css` section and are reused by class rather than re-declared.
+- **Micro-interactions**: sliding nav underline, spring toggle thumb, hover
+  lift on panels/cards/metrics, instant press feedback on buttons, segmented
+  tab selection easing, animated focus rings on toolbar selects, and smooth
+  file-drop highlight states.
+- **Route and page transitions**: route changes slide direction-aware
+  (forward/back) with staggered `panel-enter` for page headers, panels, metric
+  strips and list rows using `calc(var(--ctrl-motion-stagger) * N)` delays.
+- **Data feedback**: Overview metrics count up on change (720ms cubic ease-out,
+  deterministic under Vitest); charts animate on mount with per-series stagger;
+  loading skeletons shimmer via a shared gradient; empty states fade/slide in.
+- **Chat experience**: a three-dot typing indicator shows while awaiting the
+  first stream byte, the streaming cursor blinks only while text flows, the
+  newest completed assistant message gets a soft emphasis flash, and run-receipt
+  timeline rows stagger in.
+- **Reduced motion**: every animated and transformed hover/state effect is
+  cancelled under `prefers-reduced-motion` (see `reducedMotion.ts`), which also
+  disables chart animations and metric count-ups; non-animated layout remains
+  identical.
 
 ## Usage monitoring semantics
 
