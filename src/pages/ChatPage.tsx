@@ -629,6 +629,7 @@ function humanizeTool(value: string): string {
 }
 function formatRunCost(accounting: UsageAccountingReceipt): string {
   if (accounting.cost_coverage === "unknown") return "Cost unknown";
+  if (accounting.cost_known && accounting.cost_usd === 0) return "Free";
   const value = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: accounting.cost_usd < 0.01 ? 6 : 4, maximumFractionDigits: accounting.cost_usd < 0.01 ? 6 : 4 }).format(accounting.cost_usd);
   return accounting.cost_coverage === "partial" ? `${value}+ partial` : value;
 }

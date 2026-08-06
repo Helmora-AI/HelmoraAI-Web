@@ -26,6 +26,7 @@ export function formatEstimatedCost(request: Pick<UsageRequest, "cost_usd" | "co
   }
   if (request.cost_coverage === "complete" || request.cost_known === true) {
     const cost = request.cost_usd ?? 0;
+    if (cost === 0) return "Free";
     return formatUsd(cost);
   }
   if (request.cost_known === false) {

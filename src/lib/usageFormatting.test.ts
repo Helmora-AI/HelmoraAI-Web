@@ -18,8 +18,8 @@ describe("usageFormatting", () => {
     expect(formatEstimatedCost({ cost_usd: 0, cost_known: false, cost_source: "catalog_estimated_usage" })).toBe("Unknown");
   });
 
-  it("keeps explicit known zero-price usage at zero dollars", () => {
-    expect(formatEstimatedCost({ cost_usd: 0, cost_known: true, cost_source: "catalog_provider_usage" })).toBe("$0.00");
+  it("recognizes explicit known zero-price usage as Free", () => {
+    expect(formatEstimatedCost({ cost_usd: 0, cost_known: true, cost_source: "catalog_provider_usage" })).toBe("Free");
   });
 
   it("derives total tokens from prompt and completion when total is absent", () => {

@@ -107,11 +107,11 @@ describe("UsagePage expanded monitoring UI", () => {
   it("maps full-period summary cards and discloses the capped ledger", async () => {
     stubUsageApi(sampleUsage);
     const { container } = renderUsage();
-    expect(await screen.findByText("1.2M")).toBeInTheDocument();
-    expect(screen.getByText("$4.25")).toBeInTheDocument();
+    expect((await screen.findAllByText("1.2M")).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("$4.25").length).toBeGreaterThan(0);
     expect(screen.getByText(/91\.6% successful/)).toBeInTheDocument();
     expect(screen.getByText(/50 failed/)).toBeInTheDocument();
-    expect(screen.getByText(/2 unknown pricing · 1 legacy estimate/)).toBeInTheDocument();
+    expect(screen.getAllByText(/2 unknown pricing · 1 legacy estimate/).length).toBeGreaterThan(0);
     expect(screen.getByText(/Recent requests only/)).toBeInTheDocument();
     expect(screen.getByText(/3 shown · 3 loaded/)).toBeInTheDocument();
     expect(container.querySelector(".usage-ledger__scroll")).toBeTruthy();
@@ -129,7 +129,7 @@ describe("UsagePage expanded monitoring UI", () => {
       },
     });
     renderUsage();
-    expect(await screen.findByText(/3 partial pricing · 2 unknown pricing/)).toBeInTheDocument();
+    expect((await screen.findAllByText(/3 partial pricing · 2 unknown pricing/)).length).toBeGreaterThan(0);
   });
 
   it("uses real Hub protocol values and friendly labels without Google option", async () => {

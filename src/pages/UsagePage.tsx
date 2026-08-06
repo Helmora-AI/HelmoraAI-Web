@@ -13,12 +13,18 @@ import {
   formatModelSubtext,
   formatNumber,
   formatProtocolLabel,
-  formatUsd,
   formatUsageSource,
   successRate,
   totalTokens,
 } from "../lib/usageFormatting";
+import {
+  formatCardNote,
+  formatCardStat,
+  formatSummaryCostNote,
+  formatSummaryCostText,
+} from "../lib/usageChartStats";
 import type { UsageMetric } from "../components/UsageChart";
+import UsageChartData from "../components/UsageChartData";
 
 const UsageChart = lazy(() => import("../components/UsageChart"));
 const USAGE_CHARTS: Array<{ metric: UsageMetric; eyebrow: string; title: string; description: string }> = [
@@ -132,7 +138,7 @@ export function UsagePage() {
       <section className="metric-strip usage-summary">
         <Metric label="Requests" value={formatNumber(summary?.requests)} note={formatRequestBreakdown(summary)} tone="teal" />
         <Metric label="Total tokens" value={formatNumber(summary?.total_tokens ?? (summary?.input_tokens ?? 0) + (summary?.output_tokens ?? 0))} note={`${formatNumber(summary?.input_tokens)} in · ${formatNumber(summary?.output_tokens)} out`} tone="blue" />
-        <Metric label="Estimated cost" value={formatSummaryCost(summary)} note={formatSummaryCostNote(summary)} tone="violet" />
+        <Metric label="Estimated cost" value={formatSummaryCostText(summary)} note={formatSummaryCostNote(summary)} tone="violet" />
         <Metric label="Average latency" value={`${Math.round(summary?.average_latency_ms ?? 0)} ms`} note={`${formatNumber(summary?.physical_attempts)} physical attempts`} tone="coral" />
       </section>
       <section className="usage-observatory">
@@ -149,17 +155,33 @@ export function UsagePage() {
           </label>
         </header>
         <div className="usage-chart-grid">
-          {USAGE_CHARTS.map((chart) => (
-            <article key={chart.metric} className={chart.metric === metric ? `usage-chart-card usage-chart-card--${chart.metric} usage-chart-card--active` : `usage-chart-card usage-chart-card--${chart.metric}`}>
-              <header>
-                <div><p className="eyebrow">{chart.eyebrow}</p><h4>{chart.title}</h4><p>{chart.description}</p></div>
-                <button type="button" aria-pressed={chart.metric === metric} onClick={() => { setMetric(chart.metric); }}>{chart.metric === metric ? "Focused" : "Expand"}</button>
-              </header>
-              <Suspense fallback={<div className="chart-empty">Loading chart…</div>}>
-                <UsageChart buckets={usage.data?.buckets ?? []} metric={chart.metric} height={chart.metric === metric ? 280 : 205} />
-              </Suspense>
-            </article>
-          ))}
+          {USAGE_CHARTS.map((chart) => {
+            const focused = chart.metric === metric;
+            return (
+              <article key={chart.metric} className={focused ? `usage-chart-card usage-chart-card--${chart.metric} usage-chart-card--active` : `usage-chart-card usage-chart-card--${chart.metric}`}>
+                <header>
+                  <div><p className="eyebrow">{chart.eyebrow}</p><h4>{chart.title}</h4><p>{chart.description}</p></div>
+                  <button type="button" aria-pressed={focused} onClick={() => { setMetric(chart.metric); }}>{focused ? "Focused" : "Expand"}</button>
+                </header>
+                {usage.isPending ? (
+                  <div className="usage-chart-card__stat" aria-hidden="true"><span className="skeleton skeleton--stat" /><span className="skeleton skeleton--note" /></div>
+                ) : (
+                  <div className="usage-chart-card__stat">
+                    <strong>{formatCardStat(chart.metric, summary)}</strong>
+                    <small>{formatCardNote(chart.metric, summary)}</small>
+                  </div>
+                )}
+                {usage.isPending ? (
+                  <div className="chart-empty chart-empty--skeleton" aria-hidden="true"><span className="skeleton skeleton--chart" /></div>
+                ) : (
+                  <Suspense fallback={<div className="chart-empty">Loading chart…</div>}>
+                    <UsageChart buckets={usage.data?.buckets ?? []} metric={chart.metric} height={focused ? 280 : 205} />
+                    {focused ? <UsageChartData metric={chart.metric} buckets={usage.data?.buckets ?? []} /> : null}
+                  </Suspense>
+                )}
+              </article>
+            );
+          })}
         </div>
       </section>
       <section className="panel data-panel usage-ledger">
@@ -343,13 +365,6 @@ function RequestInspector({ details }: { details: Record<string, unknown> }) {
   );
 }
 
-function formatSummaryCost(summary?: UsageResponse["summary"]): string {
-  if (!summary) return "—";
-  const hasKnown = (summary.complete_cost_requests ?? 0) > 0 || (summary.partial_cost_requests ?? 0) > 0;
-  if (!hasKnown && summary.cost_usd === 0) return "Unknown";
-  return formatUsd(summary.cost_usd);
-}
-
 function formatRequestBreakdown(summary?: UsageResponse["summary"]): string {
   if (!summary) return "Catalog estimate";
   const parts = [`${successRate(summary)} successful`];
@@ -377,23 +392,6 @@ function formatCostCoverage(details: Record<string, unknown>): string {
     return "Pricing unavailable for this route; cost is fully unknown.";
   }
   return "Catalog estimate from final usage.";
-}
-
-function formatSummaryCostNote(summary?: UsageResponse["summary"]): string {
-  if (!summary) return "Catalog estimate";
-  const complete = summary.complete_cost_requests ?? 0;
-  const partial = summary.partial_cost_requests ?? 0;
-  const unknown = summary.unknown_cost_requests ?? 0;
-  const legacy = summary.legacy_cost_requests ?? 0;
-
-  const parts: string[] = [];
-  if (partial > 0) parts.push(`${partial} partial pricing`);
-  if (unknown > 0) parts.push(`${unknown} unknown pricing`);
-  if (legacy > 0) parts.push(`${legacy} legacy estimate`);
-
-  if (parts.length > 0) return parts.join(" · ");
-  if (complete > 0) return "Complete catalog estimate";
-  return "Catalog estimate";
 }
 
 function statusVariant(status: string): "success" | "error" | "neutral" | "info" {
