@@ -216,6 +216,8 @@ export interface ProviderManifestSummary {
   timeout_ms?: number | null;
   has_static_extra_headers?: boolean;
   tier: 1 | 2 | 3;
+  /** Approximate default list pricing (USD per 1M tokens) used for usage accounting when a model has no explicit pricing. Present on active presets. */
+  pricing?: { inputPerMillionUsd: number; outputPerMillionUsd: number };
 }
 
 export type ConnectionVerifyStatus = "ok" | "failed" | "stale";
@@ -314,7 +316,13 @@ export interface FetchedDocument { requestedUrl: string; finalUrl: string; title
 export interface TaskRecord { id: string; kind: string; status: string; input: unknown; result?: unknown; error?: unknown; progress: number; cancelRequested: boolean; createdAt: string; updatedAt: string; completedAt?: string; }
 export interface TaskEvent { sequence: number; type: string; payload: unknown; createdAt: string; }
 export interface TaskDetail { task: TaskRecord; events: TaskEvent[]; }
-export interface ApiKeyRecord { id: string; name: string; key_hint: string; scopes: string[]; model_allowlist: string[] | null; limits: Record<string, number>; disabled: boolean; expires_at: string | null; last_used_at: string | null; created_at: string; updated_at: string; }
+export interface ApiKeyLimits {
+  rpm?: number;
+  tpm?: number;
+  dailyCostUsd?: number;
+  monthlyCostUsd?: number;
+}
+export interface ApiKeyRecord { id: string; name: string; key_hint: string; scopes: string[]; model_allowlist: string[] | null; limits: ApiKeyLimits; disabled: boolean; expires_at: string | null; last_used_at: string | null; created_at: string; updated_at: string; }
 export interface ApiKeyReceipt { id: string; key: string; hint: string; }
 export interface UsageSummary {
   requests: number;

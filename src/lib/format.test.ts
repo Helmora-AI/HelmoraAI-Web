@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { formatBytes, formatDate, formatDuration, formatRateLimits } from "./format";
+import { formatBytes, formatDate, formatDuration, formatPricingPerMillion, formatRateLimits } from "./format";
 
 describe("format", () => {
   it("formats dates and falls back to the raw value when invalid", () => {
@@ -31,6 +31,15 @@ describe("format", () => {
     expect(formatRateLimits({ rpm: 10 })).toBe("10 req/min");
     expect(formatRateLimits({ tpm: 5 })).toBe("5 tok/min");
     expect(formatRateLimits({ rpm: 10, tpm: 5 })).toBe("10 req/min · 5 tok/min");
+    expect(formatRateLimits({ dailyCostUsd: 2 })).toBe("$2.00/day");
+    expect(formatRateLimits({ monthlyCostUsd: 100 })).toBe("$100.00/mo");
+    expect(formatRateLimits({ rpm: 10, tpm: 5, dailyCostUsd: 2, monthlyCostUsd: 100 })).toBe("10 req/min · 5 tok/min · $2.00/day · $100.00/mo");
+  });
+
+  it("formats per-1M pricing", () => {
+    expect(formatPricingPerMillion()).toBe("pricing unknown");
+    expect(formatPricingPerMillion(0, 0)).toBe("Free");
+    expect(formatPricingPerMillion(1.25, 10)).toBe("$1.25/$10 per 1M");
   });
 
   it("formats durations", () => {
