@@ -7,6 +7,7 @@ import { HelmoraScrollArea } from "../components/HelmoraScrollArea";
 import { ProviderIcon, providerIconBadge } from "../components/ProviderIcon";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { api } from "../lib/api/client";
+import { formatPricingPerMillion } from "../lib/format";
 import type {
   ConnectionImportModelsResponse,
   ConnectionValidation,
@@ -253,6 +254,7 @@ function ProviderCard({ provider, connections, selected, onSelectConnection, onC
       </div>
       <p className="provider-card__pill">{provider.id} · Tier {provider.tier} · {provider.protocol}</p>
       <div className="provider-card__body">
+        {provider.pricing ? <p className="provider-card__note">Default pricing: {formatPricingPerMillion(provider.pricing.inputPerMillionUsd, provider.pricing.outputPerMillionUsd)}</p> : null}
         {selected ? (
           <div className="provider-card__badges">
             <Badge variant={connectionCompleted(selected) ? "success" : "neutral"} label={connectionCompleted(selected) ? "Completed" : "Incomplete"} />
@@ -471,7 +473,7 @@ function ConfigureModal({ provider, connections, initialConnectionId, onClose, o
   return (
     <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
       <section className="modal-panel modal-panel--wide" role="dialog" aria-modal="true" aria-label={`Configure ${provider.display_name}`} ref={dialogRef} onKeyDown={trapFocus}>
-        <header><div><p className="eyebrow">Configure</p><h3>{provider.display_name}</h3></div><Button label="Close" variant="ghost" size="sm" onClick={onClose} /></header>
+        <header><div><p className="eyebrow">Configure</p><h3>{provider.display_name}</h3>{provider.pricing ? <p className="muted-copy">Default pricing: {formatPricingPerMillion(provider.pricing.inputPerMillionUsd, provider.pricing.outputPerMillionUsd)}</p> : null}</div><Button label="Close" variant="ghost" size="sm" onClick={onClose} /></header>
         {blocked ? <InlineAlert title={availabilityMessage(provider)} tone="info" /> : <>
           {connections.length > 0 ? (
             <SearchableSelect

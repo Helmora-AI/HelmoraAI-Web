@@ -7,6 +7,7 @@ import { HelmoraScrollArea } from "../components/HelmoraScrollArea";
 import { JsonPreview } from "../components/JsonPreview";
 import { SearchableSelect } from "../components/SearchableSelect";
 import { api } from "../lib/api/client";
+import { formatPricingPerMillion } from "../lib/format";
 import { onTabsKeyDown } from "../lib/tabs";
 import type {
   ConnectionImportModelsResponse,
@@ -357,8 +358,8 @@ export function ModelsRoutesPage() {
       <TextInput label="Family" value={modelDraft.family} onChange={(value) => { setModelField("family", value); }} isOptional />
       <TextInput label="Context window" value={modelDraft.contextWindow} onChange={(value) => { setModelField("contextWindow", value.replace(/\D/gu, "")); }} isRequired />
       <TextInput label="Max output tokens" value={modelDraft.maxOutputTokens} onChange={(value) => { setModelField("maxOutputTokens", value.replace(/\D/gu, "")); }} isRequired />
-      <TextInput label="Input price / 1M tokens (USD)" value={modelDraft.inputPricePerMillion ?? ""} onChange={(value) => { setModelField("inputPricePerMillion", value.replace(/[^\d.]/gu, "")); }} placeholder="Leave blank if unknown" isOptional />
-      <TextInput label="Output price / 1M tokens (USD)" value={modelDraft.outputPricePerMillion ?? ""} onChange={(value) => { setModelField("outputPricePerMillion", value.replace(/[^\d.]/gu, "")); }} placeholder="Leave blank if unknown" isOptional />
+      <TextInput label="Input price / 1M tokens (USD)" value={modelDraft.inputPricePerMillion ?? ""} onChange={(value) => { setModelField("inputPricePerMillion", value.replace(/[^\d.]/gu, "")); }} placeholder="Leave blank if unknown" isOptional description="Leave blank to inherit the provider's default pricing." />
+      <TextInput label="Output price / 1M tokens (USD)" value={modelDraft.outputPricePerMillion ?? ""} onChange={(value) => { setModelField("outputPricePerMillion", value.replace(/[^\d.]/gu, "")); }} placeholder="Leave blank if unknown" isOptional description="Leave blank to inherit the provider's default pricing." />
       <div className="check-row"><label><input type="checkbox" checked={modelDraft.tools} onChange={(event) => { setModelField("tools", event.target.checked); }} /> Tools</label><label><input type="checkbox" checked={modelDraft.reasoning} onChange={(event) => { setModelField("reasoning", event.target.checked); }} /> Reasoning</label><label><input type="checkbox" checked={modelDraft.embeddings} onChange={(event) => { setModelField("embeddings", event.target.checked); }} /> Embeddings</label></div>
       {editingId && isEnvironmentManagedRevision(modelDraft.catalogRevision) ? <InlineAlert title="Environment-managed revision is preserved on edit. Hard-delete may be reseeded after Hub restart if env vars remain." tone="warning" /> : null}
       <div className="form-grid__action"><Button type="submit" label={editingId ? "Save changes" : "Register model"} variant="primary" isLoading={createOrUpdateModel.isPending} isDisabled={modelSubmitDisabled} /></div>
@@ -427,7 +428,7 @@ function ModelsTable({ data, pending, error, onEdit, onDisable, onEnable, onDele
 }) {
   return <section className="panel data-panel"><header className="panel__header"><div><p className="eyebrow">Current state</p><h3>Model catalog</h3><p className="muted-copy">Imported models start disabled. Hard delete removes the catalog row globally and cascades route targets.</p></div></header>{error ? <RequestError error={error} /> : pending ? <p className="muted-copy">Loading models…</p> : data.length ? <div className="data-table"><div className="data-table__head"><span>Model</span><span>Capacity</span><span>Capabilities</span><span /></div>{data.map((model) => {
     const enabled = model.enabled !== false;
-    return <article key={model.id}><div><strong>{model.displayName}</strong><small>{model.id} · {model.providerId}{isEnvironmentManagedRevision(model.catalogRevision) ? " · env" : ""}</small></div><div><strong>{compactNumber(model.contextWindow)}</strong><small>{compactNumber(model.maxOutputTokens)} output · {formatModelPricing(model)}</small></div><div className="tag-row"><Badge variant={enabled ? "success" : "neutral"} label={enabled ? "Enabled" : "Disabled"} /><Badge variant="teal" label="stream" />{model.capabilities.tools ? <Badge variant="blue" label="tools" /> : null}{model.capabilities.reasoning ? <Badge variant="purple" label="reasoning" /> : null}{model.capabilities.embeddings ? <Badge variant="orange" label="embed" /> : null}</div><div className="model-actions"><Button label="Edit" variant="ghost" size="sm" onClick={() => { onEdit(model); }} />{enabled ? <Button label="Disable" variant="secondary" size="sm" onClick={() => { onDisable(model.id); }} /> : <Button label="Enable" variant="secondary" size="sm" onClick={() => { onEnable(model.id); }} />}<Button label="Delete" variant="destructive" size="sm" isLoading={deletePendingId === model.id} onClick={() => { onDelete(model); }} /></div></article>;
+    return <article key={model.id}><div><strong>{model.displayName}</strong><small>{model.id} · {model.providerId}{isEnvironmentManagedRevision(model.catalogRevision) ? " · env" : ""}</small></div><div><strong>{compactNumber(model.contextWindow)}</strong><small>{compactNumber(model.maxOutputTokens)} output · {formatPricingPerMillion(model.pricing.inputPerMillionUsd, model.pricing.outputPerMillionUsd)}</small></div><div className="tag-row"><Badge variant={enabled ? "success" : "neutral"} label={enabled ? "Enabled" : "Disabled"} /><Badge variant="teal" label="stream" />{model.capabilities.tools ? <Badge variant="blue" label="tools" /> : null}{model.capabilities.reasoning ? <Badge variant="purple" label="reasoning" /> : null}{model.capabilities.embeddings ? <Badge variant="orange" label="embed" /> : null}</div><div className="model-actions"><Button label="Edit" variant="ghost" size="sm" onClick={() => { onEdit(model); }} />{enabled ? <Button label="Disable" variant="secondary" size="sm" onClick={() => { onDisable(model.id); }} /> : <Button label="Enable" variant="secondary" size="sm" onClick={() => { onEnable(model.id); }} />}<Button label="Delete" variant="destructive" size="sm" isLoading={deletePendingId === model.id} onClick={() => { onDelete(model); }} /></div></article>;
   })}</div> : <p className="muted-copy">No models match this filter.</p>}</section>;
 }
 
@@ -470,12 +471,4 @@ function compactNumber(value: number): string {
 function validOptionalPrice(value: string | undefined): boolean {
   if (value === undefined || value.trim() === "") return true;
   return /^(?:\d+(?:\.\d*)?|\.\d+)$/u.test(value) && Number.isFinite(Number(value)) && Number(value) >= 0;
-}
-
-function formatModelPricing(model: ModelDefinition): string {
-  const input = model.pricing.inputPerMillionUsd;
-  const output = model.pricing.outputPerMillionUsd;
-  if (input === undefined || output === undefined) return "pricing unknown";
-  if (input === 0 && output === 0) return "Free";
-  return `$${input}/$${output} per 1M`;
 }
