@@ -476,5 +476,6 @@ function formatModelPricing(model: ModelDefinition): string {
   const input = model.pricing.inputPerMillionUsd;
   const output = model.pricing.outputPerMillionUsd;
   if (input === undefined || output === undefined) return "pricing unknown";
+  if (input === 0 && output === 0) return "Free";
   return `$${input}/$${output} per 1M`;
 }

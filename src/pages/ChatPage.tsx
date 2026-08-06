@@ -629,8 +629,8 @@ function humanizeTool(value: string): string {
 }
 function formatRunCost(accounting: UsageAccountingReceipt): string {
   if (accounting.cost_coverage === "unknown") return "Cost unknown";
-  if (accounting.cost_known && accounting.cost_usd === 0) return "Free";
   const value = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: accounting.cost_usd < 0.01 ? 6 : 4, maximumFractionDigits: accounting.cost_usd < 0.01 ? 6 : 4 }).format(accounting.cost_usd);
-  return accounting.cost_coverage === "partial" ? `${value}+ partial` : value;
+  if (accounting.cost_coverage === "partial") return `${value}+ partial`;
+  return accounting.cost_known && accounting.cost_usd === 0 ? "Free" : value;
 }
 function formatTime(value: string): string { const date = new Date(value); return Number.isNaN(date.valueOf()) ? value : new Intl.DateTimeFormat(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(date); }
