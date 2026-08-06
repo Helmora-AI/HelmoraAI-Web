@@ -34,6 +34,12 @@ describe("ApiClient", () => {
     await expect(client.request("/bad")).rejects.toMatchObject({ status: 400, code: "JSON_INVALID", requestId: "req_test", retryable: false } satisfies Partial<ApiError>);
   });
 
+  it("parses COST_LIMIT_EXCEEDED as a non-retryable 429 with cost details", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => jsonResponse({ error: { type: "rate_limit_error", code: "COST_LIMIT_EXCEEDED", message: "The API key daily cost limit was exceeded.", request_id: "req_cost", retryable: false, retry_after_ms: null, details: { period: "day", limitUsd: 2, spentUsd: 2.5 } } }, 429)));
+    const client = new ApiClient();
+    await expect(client.request("/v1/responses", { method: "POST", body: {} })).rejects.toMatchObject({ status: 429, code: "COST_LIMIT_EXCEEDED", requestId: "req_cost", retryable: false, retryAfterMs: null, details: { period: "day", limitUsd: 2, spentUsd: 2.5 } } satisfies Partial<ApiError>);
+  });
+
   it("parses typed SSE across split chunks and CRLF boundaries", async () => {
     const encoder = new TextEncoder();
     const stream = new ReadableStream<Uint8Array>({ start(controller) { controller.enqueue(encoder.encode("event: response.output_text.delta\r\ndata: {\"delta\":\"Hel")); controller.enqueue(encoder.encode("mora\"}\r\n\r\nevent: response.completed\ndata: {\"ok\":true}\n\n")); controller.close(); } });
