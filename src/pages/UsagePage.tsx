@@ -30,7 +30,7 @@ const UsageChart = lazy(() => import("../components/UsageChart"));
 const USAGE_CHARTS: Array<{ metric: UsageMetric; eyebrow: string; title: string; description: string }> = [
   { metric: "requests", eyebrow: "Reliability", title: "Request outcomes", description: "Successful, failed, cancelled, and partial requests." },
   { metric: "tokens", eyebrow: "Demand", title: "Token volume", description: "Input and output token consumption over time." },
-  { metric: "cost", eyebrow: "Economics", title: "Estimated cost", description: "Known catalog cost with unknown-pricing coverage." },
+  { metric: "cost", eyebrow: "Economics", title: "Estimated cost", description: "Catalog cost from provider pricing, with coverage notes where pricing is unknown." },
   { metric: "latency", eyebrow: "Performance", title: "Average latency", description: "End-to-end response time for logical requests." },
 ];
 
