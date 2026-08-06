@@ -73,6 +73,9 @@ Highlights:
   library, `--ctrl-motion-*` durations and `--ctrl-ease-*` curves, staggered
   entrances, direction-aware route transitions, live metric count-ups and chat
   streaming feedback); see [Motion and interaction design](#motion-and-interaction-design).
+- Mobile drawers manage keyboard/AT focus (inert off-canvas panels, focus
+  restore, Escape close), and a contrast guard test locks WCAG AA text contrast
+  across both themes plus a 9.6px floor on mono font sizes.
 
 ## Requirements
 
@@ -361,7 +364,6 @@ evidence only until an operator deploys it.
   planner to budget long histories.
 - Recovery/deployment-doctor UI and full reconnect/resume semantics remain
   deferred.
-- Modal focus trap/restoration and transcript roles are not fully consistent.
 - Provider logo assets remain large and have no public asset-size gate.
 - There is no dedicated UI for native-stream support observations or synthetic
   TTFT.

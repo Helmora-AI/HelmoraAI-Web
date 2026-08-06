@@ -1,11 +1,15 @@
-import { render, screen, waitFor } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent } from "@testing-library/dom";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppProviders } from "../app/providers";
 import { ChatPage } from "./ChatPage";
 
-afterEach(() => { vi.unstubAllGlobals(); });
+afterEach(() => {
+  cleanup();
+  vi.unstubAllGlobals();
+});
 
 describe("ChatPage", () => {
   it("persists a direct SSE answer, unlocks the composer, then switches to agent mode", async () => {
@@ -75,6 +79,40 @@ describe("ChatPage", () => {
     expect(source).toHaveAttribute("href", "https://example.com/reference");
     expect(source).toHaveAttribute("rel", expect.stringContaining("noopener"));
     expect(requests.some((request) => request.url === "/api/v2/chat" && request.method === "POST")).toBe(true);
+  }, 15_000);
+
+  it("makes the off-canvas conversation history inert when closed and manages focus when opened and closed", async () => {
+    vi.stubGlobal("matchMedia", vi.fn((query: string) => ({
+      matches: query === "(max-width: 820px)",
+      media: query,
+      addEventListener: () => {},
+      removeEventListener: () => {},
+    })));
+    vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/api/v2/routes/models") return json({ data: [{ id: "mock-route", displayName: "Mock route", capabilities: { modalities: ["text"] } }] });
+      if (url.startsWith("/api/v2/conversations?")) return json({ data: [], nextCursor: null });
+      throw new Error(`Unhandled fetch in ChatPage drawer test: ${url}`);
+    }));
+    render(<MemoryRouter><AppProviders><ChatPage /></AppProviders></MemoryRouter>);
+
+    const aside = document.querySelector<HTMLElement>(".chat-history");
+    const main = document.querySelector<HTMLElement>(".chat-main");
+    expect(aside).not.toBeNull();
+    expect(aside).toHaveAttribute("inert");
+
+    const toggle = document.querySelector<HTMLButtonElement>(".chat-history-mobile-toggle");
+    expect(toggle).not.toBeNull();
+    fireEvent.click(toggle!);
+
+    await waitFor(() => { expect(aside).not.toHaveAttribute("inert"); });
+    expect(screen.getByPlaceholderText("Search conversations")).toHaveFocus();
+    expect(main).toHaveAttribute("inert");
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    await waitFor(() => { expect(aside).toHaveAttribute("inert"); });
+    expect(toggle).toHaveFocus();
   }, 15_000);
 });
 

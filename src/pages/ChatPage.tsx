@@ -10,6 +10,7 @@ import { InlineAlert, RequestError } from "../components/InlineAlert";
 import { api } from "../lib/api/client";
 import type { Conversation, ConversationDetail, ConversationList, ListResponse, ModelSummary, NativeChatResponse, ResponsesCompletedEvent, StoredMessage, ToolDefinition, UsageAccountingReceipt } from "../lib/api/types";
 import { distanceFromBottom, shouldFollowAfterScroll, shouldShowJumpToLatest } from "../lib/chatScrollFollow";
+import { useMediaQuery } from "../lib/useMediaQuery";
 
 interface DraftMessage { id: string; role: "user" | "assistant"; text: string; pending?: boolean; }
 interface RunCitation { id: string; url: string; title: string; snippet?: string; }
@@ -64,6 +65,11 @@ export function ChatPage() {
   const scrollFrameRef = useRef(0);
   const [following, setFollowing] = useState(true);
   const [jumpVisible, setJumpVisible] = useState(false);
+  const compact = useMediaQuery("(max-width: 820px)");
+  const historyPanelRef = useRef<HTMLElement>(null);
+  const historyToggleRef = useRef<HTMLButtonElement>(null);
+  const historySearchRef = useRef<HTMLInputElement>(null);
+  const historyWasOpen = useRef(false);
 
   const conversations = useQuery({ queryKey: ["conversations", "chat"], queryFn: () => api.request<ConversationList>("/api/v2/conversations?limit=50") });
   const detail = useQuery({ queryKey: ["conversation", conversationId], queryFn: () => api.request<ConversationDetail>(`/api/v2/conversations/${encodeURIComponent(conversationId!)}`), enabled: Boolean(conversationId) });
@@ -113,6 +119,26 @@ export function ChatPage() {
     document.addEventListener("pointerdown", closeModelMenu);
     return () => { document.removeEventListener("pointerdown", closeModelMenu); };
   }, []);
+
+  useEffect(() => {
+    if (!historyOpen) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setHistoryOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => { window.removeEventListener("keydown", closeOnEscape); };
+  }, [historyOpen]);
+
+  useEffect(() => {
+    if (!compact) return;
+    if (historyOpen) {
+      historyWasOpen.current = true;
+      historySearchRef.current?.focus();
+    } else if (historyWasOpen.current) {
+      historyWasOpen.current = false;
+      historyToggleRef.current?.focus();
+    }
+  }, [historyOpen, compact]);
 
   useEffect(() => () => { recognitionRef.current?.stop(); }, []);
 
@@ -339,14 +365,14 @@ export function ChatPage() {
   return (
     <div className="chat-workspace">
       {historyOpen ? <button className="chat-history__scrim" type="button" aria-label="Close conversation history" onClick={() => { setHistoryOpen(false); }} /> : null}
-      <aside className={`chat-history${historyOpen ? " chat-history--open" : ""}`}>
+      <aside ref={historyPanelRef} inert={compact && !historyOpen} className={`chat-history${historyOpen ? " chat-history--open" : ""}`}>
         <div className="chat-history__header">
           <div><p className="eyebrow">Workspace</p><h2>Conversations</h2></div>
           <Button label="New chat" variant="secondary" size="sm" onClick={() => { selectConversation(undefined); composerRef.current?.focus(); }} />
         </div>
         <label className="chat-history__search">
           <span className="sr-only">Search conversations</span>
-          <input type="search" value={historySearch} onChange={(event) => { setHistorySearch(event.target.value); }} placeholder="Search conversations" />
+          <input ref={historySearchRef} type="search" value={historySearch} onChange={(event) => { setHistorySearch(event.target.value); }} placeholder="Search conversations" />
         </label>
         <HelmoraScrollArea className="chat-history__list" aria-label="Conversation history">
           {conversations.isPending ? <ConversationSkeleton /> : filteredConversations.length ? filteredConversations.map((conversation) => (
@@ -358,11 +384,11 @@ export function ChatPage() {
         </HelmoraScrollArea>
         <footer className="chat-history__footer"><span>{conversations.data?.data.length ?? 0} recent threads</span><span>Synced with Hub</span></footer>
       </aside>
-      <section className="chat-main">
+      <section className="chat-main" inert={compact && historyOpen}>
         <header className="chat-toolbar">
           <div className="chat-toolbar__start">
-            <button className="chat-history-mobile-toggle" type="button" aria-label="Open conversation history" aria-expanded={historyOpen} onClick={() => { setHistoryOpen(true); }}>☰</button>
-            <div className="chat-model-state" aria-label="Current response mode">
+            <button ref={historyToggleRef} className="chat-history-mobile-toggle" type="button" aria-label="Open conversation history" aria-expanded={historyOpen} onClick={() => { setHistoryOpen(true); }}>☰</button>
+            <div className="chat-model-state" role="status" aria-label="Current response mode">
               <span className={running ? "chat-model-state__dot chat-model-state__dot--active" : "chat-model-state__dot"} />
               <span>{conversationId ? detail.data?.conversation.title ?? "Conversation" : "New conversation"}</span>
             </div>

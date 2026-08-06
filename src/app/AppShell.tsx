@@ -1,11 +1,12 @@
 import { Badge, Button } from "@astryxdesign/core";
 import { useQuery } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { NavLink, Outlet, useLocation, useNavigationType } from "react-router-dom";
 import { Brand } from "../components/Brand";
 import { FunctionIcon, type FunctionIconName } from "../components/FunctionIcon";
 import { api } from "../lib/api/client";
 import type { HealthResponse } from "../lib/api/types";
+import { useMediaQuery } from "../lib/useMediaQuery";
 import {
   HUB_LATENCY_POLL_MS,
   formatHubLatencyLabel,
@@ -52,6 +53,10 @@ export function AppShell() {
   const location = useLocation();
   const navigationType = useNavigationType();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const compact = useMediaQuery("(max-width: 820px)");
+  const sidebarRef = useRef<HTMLElement>(null);
+  const mobileMenuRef = useRef<HTMLButtonElement>(null);
+  const sidebarWasOpen = useRef(false);
   const latency = useQuery({
     queryKey: ["hub-latency"],
     queryFn: async ({ signal }) => {
@@ -78,11 +83,22 @@ export function AppShell() {
     window.addEventListener("keydown", closeOnEscape);
     return () => { window.removeEventListener("keydown", closeOnEscape); };
   }, [mobileOpen]);
+  useEffect(() => {
+    if (!compact) return;
+    if (mobileOpen) {
+      sidebarWasOpen.current = true;
+      const first = sidebarRef.current?.querySelector<HTMLElement>("a.nav-link, button");
+      first?.focus();
+    } else if (sidebarWasOpen.current) {
+      sidebarWasOpen.current = false;
+      mobileMenuRef.current?.focus();
+    }
+  }, [mobileOpen, compact]);
 
   return (
     <div className="app-shell">
       {mobileOpen ? <button className="sidebar-scrim" aria-label="Close navigation" onClick={() => { setMobileOpen(false); }} /> : null}
-      <aside id="primary-sidebar" className={`sidebar${mobileOpen ? " sidebar--open" : ""}`}>
+      <aside id="primary-sidebar" ref={sidebarRef} inert={compact && !mobileOpen} className={`sidebar${mobileOpen ? " sidebar--open" : ""}`}>
         <div className="sidebar__brand"><Brand /></div>
         <nav className="sidebar__nav" aria-label="Primary navigation">
           {NAVIGATION.map((group) => (
@@ -105,10 +121,10 @@ export function AppShell() {
         </div>
       </aside>
 
-      <div className="app-shell__main">
+      <div className="app-shell__main" inert={compact && mobileOpen}>
         <header className="topbar">
           <div className="topbar__start">
-            <button className="mobile-menu" aria-label="Open navigation" aria-controls="primary-sidebar" aria-expanded={mobileOpen} onClick={() => { setMobileOpen(true); }}>☰</button>
+            <button ref={mobileMenuRef} className="mobile-menu" aria-label="Open navigation" aria-controls="primary-sidebar" aria-expanded={mobileOpen} onClick={() => { setMobileOpen(true); }}>☰</button>
             <div><p className="topbar__crumb">Helmora Hub</p><h1>{title}</h1></div>
           </div>
           <div className="topbar__actions">
@@ -135,7 +151,7 @@ function HubLatencyBadge({ state, latencyMs }: { state: "pending" | "error" | "s
   const visibleMs = state === "success" ? latencyMs : undefined;
   const label = formatHubLatencyLabel(state, visibleMs);
   const title = hubLatencyAccessibleName(state, visibleMs);
-  return <div className="hub-latency" title={title} aria-label={title}><Badge variant={variant} label={label} /></div>;
+  return <div className="hub-latency" role="img" title={title} aria-label={title}><Badge variant={variant} label={label} /></div>;
 }
 
 function ThemeControl({ preference, setPreference }: { preference: ThemePreference; setPreference: (value: ThemePreference) => void }) {
